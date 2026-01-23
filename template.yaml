@@ -17,7 +17,7 @@ Parameters:
     Description: ARN of the IAM execution role for the scheduled Lambda function
   ScheduleExpression:
     Type: String
-    Default: cron(0 0 ? * MON *)
+    Default: cron(0 9 ? * MON *)
     Description: EventBridge cron expression for scheduled job
   ScheduleExpressionTimezone:
     Type: String
