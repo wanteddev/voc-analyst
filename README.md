@@ -253,9 +253,9 @@ just build && just deploy
 - 부정 정의: `overall_emotion = '부정'`
 
 ### 변화 감지 기준
-- **CRITICAL**: (증가≥30% 또는 부정비율+20%p) & 기준주 VOC≥20
-- **MONITOR**: (증가≥30% 또는 부정비율+10%p) & 기준주 VOC≥10
-- **IMPROVED**: 감소≥30% & 기준주 VOC≥10
+- **CRITICAL**: (증가≥30% 또는 부정비율+20%p) & 비교주 또는 기준주 VOC≥20
+- **MONITOR**: (증가≥20% 또는 부정비율+10%p) & 비교주 또는 기준주 VOC≥10
+- **IMPROVED**: 감소≥20% & 비교주 또는 기준주 VOC≥10
 - **STABLE**: 그 외
 
 ### Slack 알림 흐름

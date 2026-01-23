@@ -242,17 +242,19 @@ def _severity_for_change(
     last: VOCCounts,
     ratio_delta: float | None,
 ) -> str:
-    if prev.total <= 0:
+    if prev.total <= 0 and last.total <= 0:
         return "stable"
-    increased = last.total >= prev.total * 1.3
-    decreased = last.total <= prev.total * 0.7
+    baseline_total = max(prev.total, last.total)
+    increased_30 = last.total >= prev.total * 1.3
+    increased_20 = last.total >= prev.total * 1.2
+    decreased_20 = last.total <= prev.total * 0.8
     ratio_increase_20 = ratio_delta is not None and ratio_delta >= 0.20
     ratio_increase_10 = ratio_delta is not None and ratio_delta >= 0.10
-    if prev.total >= 20 and (increased or ratio_increase_20):
+    if baseline_total >= 20 and (increased_30 or ratio_increase_20):
         return "critical"
-    if prev.total >= 10 and (increased or ratio_increase_10):
+    if baseline_total >= 10 and (increased_20 or ratio_increase_10):
         return "monitor"
-    if prev.total >= 10 and decreased:
+    if baseline_total >= 10 and decreased_20:
         return "improved"
     return "stable"
 
@@ -260,10 +262,6 @@ def _severity_for_change(
 def detect_changes(
     prev: WeeklyVOC,
     last: WeeklyVOC,
-    *,
-    min_abs_change: int,
-    min_pct_change: float,
-    min_count: int,
 ) -> list[VOCChange]:
     labels = set(prev.counts.keys()) | set(last.counts.keys())
     changes: list[VOCChange] = []
@@ -284,48 +282,49 @@ def detect_changes(
         if prev_ratio is not None and last_ratio is not None:
             ratio_delta = last_ratio - prev_ratio
         severity = _severity_for_change(prev=prev_counts, last=last_counts, ratio_delta=ratio_delta)
-        passes_filters = True
-        if max(prev_count, last_count) < min_count:
-            passes_filters = False
-        if abs(delta) < min_abs_change:
-            passes_filters = False
-        if pct_change is not None and abs(pct_change) < min_pct_change:
-            passes_filters = False
-        if severity == "stable" or passes_filters:
-            changes.append(
-                VOCChange(
-                    label=label,
-                    prev_count=prev_count,
-                    last_count=last_count,
-                    delta=delta,
-                    pct_change=pct_change,
-                    prev_negative_ratio=prev_ratio,
-                    last_negative_ratio=last_ratio,
-                    severity=severity,
-                )
+        if severity == "stable":
+            continue
+        changes.append(
+            VOCChange(
+                label=label,
+                prev_count=prev_count,
+                last_count=last_count,
+                delta=delta,
+                pct_change=pct_change,
+                prev_negative_ratio=prev_ratio,
+                last_negative_ratio=last_ratio,
+                severity=severity,
             )
+        )
     return changes
 
 
 def _format_change(change: VOCChange) -> str:
     direction = "↑" if change.delta > 0 else "↓"
+    trend_emoji = "📈" if change.delta > 0 else "📉" if change.delta < 0 else "📊"
     if change.pct_change is None:
         pct_text = "new"
     else:
         pct_text = f"{change.pct_change:+.1f}%"
+    ratio_emoji = "🙂"
     if change.prev_negative_ratio is not None and change.last_negative_ratio is not None:
         delta = (change.last_negative_ratio - change.prev_negative_ratio) * 100
+        delta_text = "-" if round(delta, 1) == 0.0 else f"{delta:+.1f}p"
+        if round(delta, 1) > 0:
+            ratio_emoji = "😈"
+        elif round(delta, 1) < 0:
+            ratio_emoji = "😇"
         ratio_text = (
             f"{change.prev_negative_ratio*100:.1f}%→{change.last_negative_ratio*100:.1f}%"
-            f" ({delta:+.1f}p)"
+            f" ({delta_text})"
         )
     else:
         ratio_text = "n/a"
 
     return (
         f"*{change.label}*\n"
-        f"📊 {change.prev_count} → {change.last_count} ({direction}{abs(change.delta)}) / {pct_text}\n"
-        f"😡 {ratio_text}"
+        f"{trend_emoji} VOC 수: {change.prev_count} → {change.last_count} ({direction}{abs(change.delta)}) / {pct_text}\n"
+        f"{ratio_emoji} 부정비율: {ratio_text}"
     )
 
 
@@ -363,7 +362,7 @@ def build_slack_blocks(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"비교 기간: {prev_range} → {last_range}",
+                "text": f"기간: 기준주 ({prev_range}) vs. 비교주 ({last_range})",
             },
         },
         {
@@ -399,6 +398,7 @@ def build_slack_blocks(
         for i in range(0, len(fields), 2):
             blocks.append({"type": "section", "fields": fields[i : i + 2]})
 
+    blocks.append({"type": "divider"})
     blocks.append(
         {
             "type": "context",
@@ -406,10 +406,10 @@ def build_slack_blocks(
                 {
                     "type": "mrkdwn",
                     "text": (
-                        "_기준(요약): "
-                        "*CRITICAL* (증가≥30% 또는 부정비율+20%p) & 기준주 VOC≥20  ·  "
-                        "*MONITOR* (증가≥30% 또는 부정비율+10%p) & 기준주 VOC≥10  ·  "
-                        "*IMPROVED* 감소≥30% & 기준주 VOC≥10_"
+                        "_라벨 판단 기준_\n"
+                        "*CRITICAL* (증가≥30% 또는 부정비율+20%p) & 비교주 또는 기준주 VOC≥20\n"
+                        "*MONITOR* (증가≥20% 또는 부정비율+10%p) & 비교주 또는 기준주 VOC≥10\n"
+                        "*IMPROVED* 감소≥20% & 비교주 또는 기준주 VOC≥10"
                     ),
                 }
             ],
@@ -444,7 +444,7 @@ def build_no_change_blocks(prev: WeeklyVOC, last: WeeklyVOC) -> list[dict[str, A
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"비교 기간: {prev_range} → {last_range}",
+                "text": f"기간: 기준주 ({prev_range}) vs. 비교주 ({last_range})",
             },
         },
         {"type": "divider"},
@@ -632,10 +632,6 @@ async def build_weekly_voc_report(*, force_run: bool) -> dict[str, Any]:
     if not force_run and not _is_monday_in_tz(now):
         return {"status": "skipped", "reason": "not_monday"}
 
-    min_abs_change = int(os.environ.get("VOC_MIN_ABS_CHANGE", "5"))
-    min_pct_change = float(os.environ.get("VOC_MIN_PCT_CHANGE", "20"))
-    min_count = int(os.environ.get("VOC_MIN_COUNT", "5"))
-
     weekly_items = await _read_bigquery_weekly()
     latest = select_latest_two(weekly_items)
     if latest is None:
@@ -643,23 +639,13 @@ async def build_weekly_voc_report(*, force_run: bool) -> dict[str, Any]:
 
     prev, last = latest
     total_labels = len(set(prev.counts.keys()) | set(last.counts.keys()))
-    changes = detect_changes(
-        prev,
-        last,
-        min_abs_change=min_abs_change,
-        min_pct_change=min_pct_change,
-        min_count=min_count,
-    )
+    changes = detect_changes(prev, last)
     logger.info(
-        "weekly_voc.change_summary week_prev=%s week_last=%s total_labels=%s change_count=%s "
-        "min_abs_change=%s min_pct_change=%s min_count=%s",
+        "weekly_voc.change_summary week_prev=%s week_last=%s total_labels=%s change_count=%s",
         prev.week_start,
         last.week_start,
         total_labels,
         len(changes),
-        min_abs_change,
-        min_pct_change,
-        min_count,
     )
     if not changes:
         return {
