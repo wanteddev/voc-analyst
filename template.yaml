@@ -41,6 +41,40 @@ Parameters:
     NoEcho: true
     Description: Slack Signing Secret for request verification
 
+  VocBigqueryProject:
+    Type: String
+    NoEcho: true
+    Description: "VOC_BIGQUERY_PROJECT environment variable (synced from .env)"
+
+  VocBigqueryTable:
+    Type: String
+    NoEcho: true
+    Description: "VOC_BIGQUERY_TABLE environment variable (synced from .env)"
+
+  VocBigqueryStartDate:
+    Type: String
+    NoEcho: true
+    Description: "VOC_BIGQUERY_START_DATE environment variable (synced from .env)"
+
+  VocBigqueryLocation:
+    Type: String
+    NoEcho: true
+    Description: "VOC_BIGQUERY_LOCATION environment variable (synced from .env)"
+
+  VocGoogleCredentialsSsmKey:
+    Type: String
+    NoEcho: true
+    Description: "VOC_GOOGLE_CREDENTIALS_SSM_KEY environment variable (synced from .env)"
+
+  VocSlackChannel:
+    Type: String
+    NoEcho: true
+    Description: "VOC_SLACK_CHANNEL environment variable (synced from .env)"
+  VocForceRun:
+    Type: String
+    Default: "false"
+    Description: "VOC_FORCE_RUN environment variable for one-off runs (true/false)"
+
 Resources:
   WebFunction:
     Type: AWS::Lambda::Function
@@ -60,6 +94,12 @@ Resources:
           SLACK_BOT_TOKEN: !Ref SlackBotToken
           SLACK_SIGNING_SECRET: !Ref SlackSigningSecret
           SLACK_BG_FUNCTION_NAME: !Ref SlackBgFunction
+          VOC_BIGQUERY_PROJECT: !Ref VocBigqueryProject
+          VOC_BIGQUERY_TABLE: !Ref VocBigqueryTable
+          VOC_BIGQUERY_START_DATE: !Ref VocBigqueryStartDate
+          VOC_BIGQUERY_LOCATION: !Ref VocBigqueryLocation
+          VOC_GOOGLE_CREDENTIALS_SSM_KEY: !Ref VocGoogleCredentialsSsmKey
+          VOC_SLACK_CHANNEL: !Ref VocSlackChannel
 
   WebFunctionUrl:
     Type: AWS::Lambda::Url
@@ -100,6 +140,15 @@ Resources:
           AWS_LWA_PORT: "8080"
           AWS_LWA_PASS_THROUGH_PATH: "/events"
           APP_MODE: "job"
+          SLACK_BOT_TOKEN: !Ref SlackBotToken
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecret
+          VOC_FORCE_RUN: !Ref VocForceRun
+          VOC_BIGQUERY_PROJECT: !Ref VocBigqueryProject
+          VOC_BIGQUERY_TABLE: !Ref VocBigqueryTable
+          VOC_BIGQUERY_START_DATE: !Ref VocBigqueryStartDate
+          VOC_BIGQUERY_LOCATION: !Ref VocBigqueryLocation
+          VOC_GOOGLE_CREDENTIALS_SSM_KEY: !Ref VocGoogleCredentialsSsmKey
+          VOC_SLACK_CHANNEL: !Ref VocSlackChannel
 
   CronSchedule:
     Type: AWS::Scheduler::Schedule
@@ -132,6 +181,12 @@ Resources:
           AWS_LWA_PASS_THROUGH_PATH: "/slack/background"
           APP_MODE: "slack-bg"
           SLACK_BOT_TOKEN: !Ref SlackBotToken
+          VOC_BIGQUERY_PROJECT: !Ref VocBigqueryProject
+          VOC_BIGQUERY_TABLE: !Ref VocBigqueryTable
+          VOC_BIGQUERY_START_DATE: !Ref VocBigqueryStartDate
+          VOC_BIGQUERY_LOCATION: !Ref VocBigqueryLocation
+          VOC_GOOGLE_CREDENTIALS_SSM_KEY: !Ref VocGoogleCredentialsSsmKey
+          VOC_SLACK_CHANNEL: !Ref VocSlackChannel
 
 Outputs:
   WebFunctionUrl:

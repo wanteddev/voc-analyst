@@ -35,7 +35,11 @@ async def handle_event(data: dict[str, Any]) -> dict[str, Any]:
     """
     from voc_analyst.jobs.runner import run_scheduled_job
 
-    return await run_scheduled_job(data)
+    try:
+        return await run_scheduled_job(data)
+    except Exception as exc:
+        logger.exception(f"Critical error in scheduled job handler: {exc}")
+        raise
 
 
 
