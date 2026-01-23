@@ -65,6 +65,33 @@ attach_policy_if_not_attached() {
   fi
 }
 
+put_inline_policy() {
+  local role_name="$1"
+  local policy_name="$2"
+  local policy_doc="$3"
+
+  echo "Putting inline policy $policy_name on $role_name"
+  $AWS_CMD iam put-role-policy \
+    --role-name "$role_name" \
+    --policy-name "$policy_name" \
+    --policy-document "$policy_doc" \
+    --region "$REGION"
+}
+
+SSM_READ_POLICY="{
+  \"Version\": \"2012-10-17\",
+  \"Statement\": [
+    {
+      \"Effect\": \"Allow\",
+      \"Action\": [\"ssm:GetParameter\"],
+      \"Resource\": [
+        \"arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/DATA/WWW/GOOGLE/SERVICE_CREDENTIALS\",
+        \"arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/DATA/PIPELINE/API_KEY/OPENAI\"
+      ]
+    }
+  ]
+}"
+
 # 1. Web 함수 역할
 WEB_ROLE_NAME="${STACK_NAME}-web-role"
 create_role_if_not_exists "$WEB_ROLE_NAME" "$LAMBDA_TRUST_POLICY" "Lambda execution role for $STACK_NAME web function"
@@ -77,6 +104,7 @@ attach_policy_if_not_attached "$WEB_ROLE_NAME" "arn:aws:iam::aws:policy/AWSLambd
 JOB_ROLE_NAME="${STACK_NAME}-job-role"
 create_role_if_not_exists "$JOB_ROLE_NAME" "$LAMBDA_TRUST_POLICY" "Lambda execution role for $STACK_NAME job function"
 attach_policy_if_not_attached "$JOB_ROLE_NAME" "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+put_inline_policy "$JOB_ROLE_NAME" "${STACK_NAME}-ssm-read" "$SSM_READ_POLICY"
 
 # 3. Scheduler 역할
 CRON_ROLE_NAME="${STACK_NAME}-cron-role"
@@ -89,6 +117,7 @@ attach_policy_if_not_attached "$CRON_ROLE_NAME" "arn:aws:iam::aws:policy/AWSLamb
 SLACK_BG_ROLE_NAME="${STACK_NAME}-slack-bg-role"
 create_role_if_not_exists "$SLACK_BG_ROLE_NAME" "$LAMBDA_TRUST_POLICY" "Lambda execution role for $STACK_NAME Slack background function"
 attach_policy_if_not_attached "$SLACK_BG_ROLE_NAME" "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+put_inline_policy "$SLACK_BG_ROLE_NAME" "${STACK_NAME}-ssm-read" "$SSM_READ_POLICY"
 
 echo ""
 echo "IAM roles created successfully!"

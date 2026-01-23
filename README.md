@@ -89,6 +89,55 @@ just url
 | `just create-roles` | 필요한 IAM 역할 생성 (첫 배포 전 1회) |
 | `just sync-env` | `.env`의 LAMBDA_* 변수를 CloudFormation에 동기화 |
 
+## 로컬 테스트 메시지 보내기
+
+주간 VOC 메시지를 **로컬에서 강제 실행**하여 Slack 채널로 테스트 전송합니다.
+
+```bash
+set -a
+source .env
+set +a
+uv run python - <<'PY'
+import asyncio
+import os
+from voc_analyst.jobs.voc_weekly import (
+    build_weekly_voc_report,
+    send_slack_notification,
+    _post_followups,
+)
+
+async def main():
+    channel = os.environ.get("VOC_SLACK_CHANNEL") or os.environ.get("LAMBDA_VOC_SLACK_CHANNEL")
+    if not channel:
+        raise SystemExit("VOC_SLACK_CHANNEL or LAMBDA_VOC_SLACK_CHANNEL is required")
+
+    report = await build_weekly_voc_report(force_run=True)
+    if report.get("status") != "ok":
+        print(report)
+        return
+    if report.get("changes", 0) == 0:
+        print({"status": "ok", "changes": 0})
+        return
+
+    thread_ts = await send_slack_notification(channel, report.get("blocks", []))
+    if thread_ts:
+        await _post_followups(
+            channel=channel,
+            thread_ts=thread_ts,
+            prev=report["prev"],
+            last=report["last"],
+            changes=report["changes_list"],
+        )
+    print({"status": "ok", "changes": report.get("changes", 0)})
+
+asyncio.run(main())
+PY
+```
+
+필수 환경변수는 `.env`에 설정합니다:
+- `SLACK_BOT_TOKEN`
+- `VOC_SLACK_CHANNEL` (또는 `LAMBDA_VOC_SLACK_CHANNEL`)
+
 ## 프로젝트 구조
 
 ```

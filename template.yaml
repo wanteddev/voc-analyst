@@ -70,10 +70,6 @@ Parameters:
     Type: String
     NoEcho: true
     Description: "VOC_SLACK_CHANNEL environment variable (synced from .env)"
-  VocForceRun:
-    Type: String
-    Default: "false"
-    Description: "VOC_FORCE_RUN environment variable for one-off runs (true/false)"
 
 Resources:
   WebFunction:
@@ -142,7 +138,6 @@ Resources:
           APP_MODE: "job"
           SLACK_BOT_TOKEN: !Ref SlackBotToken
           SLACK_SIGNING_SECRET: !Ref SlackSigningSecret
-          VOC_FORCE_RUN: !Ref VocForceRun
           VOC_BIGQUERY_PROJECT: !Ref VocBigqueryProject
           VOC_BIGQUERY_TABLE: !Ref VocBigqueryTable
           VOC_BIGQUERY_START_DATE: !Ref VocBigqueryStartDate
