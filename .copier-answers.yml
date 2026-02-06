@@ -11,6 +11,6 @@ lambda_timeout_slack_bg: 120
 lambda_timeout_web: 15
 project_description: A Slack bot on AWS Lambda with Litestar
 project_name: VoC Monitoring
-project_slug: voc-monitoring
+project_slug: voc_monitoring
 python_version: '3.13'
 stack_name: sandbox
