@@ -1,16 +1,21 @@
 # Changes here will be overwritten by Copier
-_commit: d260bad
+_commit: '4186918'
 _src_path: https://github.com/wanteddev/slack-bot-lambda-template.git
 author_name: june
 aws_account_id: '216989105690'
 aws_region: ap-northeast-2
-include_scheduler: false
+include_scheduler: true
+lambda_memory_job: 1024
 lambda_memory_slack_bg: 1024
 lambda_memory_web: 1024
+lambda_timeout_job: 120
 lambda_timeout_slack_bg: 120
 lambda_timeout_web: 15
 project_description: A Slack bot on AWS Lambda with Litestar
 project_name: VoC Monitoring
 project_slug: voc_monitoring
 python_version: '3.13'
+schedule_expression: cron(0 0 ? * MON *)
 stack_name: sandbox
+timezone: Asia/Seoul
+
