@@ -192,10 +192,6 @@ Outputs:
     Description: Name of the scheduled job function
     Value: !Ref JobFunction
 
-  JobFunctionName:
-    Description: Name of the scheduled job function
-    Value: !Ref JobFunction
-
   SlackBgFunctionName:
     Description: Name of the Slack background function
     Value: !Ref SlackBgFunction

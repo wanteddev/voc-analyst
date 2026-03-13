@@ -123,13 +123,6 @@ async def _handle_slash_command_bg(payload: dict) -> dict[str, Any]:
 
     logger.info(f"Background processing {command} from user {user_id}")
 
-    # ==========================================================================
-    # YOUR LONG-RUNNING LOGIC HERE
-    # Example: API calls, database queries, ML inference, etc.
-    # ==========================================================================
-    import asyncio
-
-    await asyncio.sleep(2)  # Simulate long processing
     result = f"Processed '{text}' successfully!"
 
     # Send response via response_url (works for up to 30 minutes after command)
@@ -159,12 +152,6 @@ async def _handle_dm_message_bg(payload: dict) -> dict[str, Any]:
 
     logger.info(f"Background processing DM from user {user_id}: {text}")
 
-    # ==========================================================================
-    # YOUR LONG-RUNNING LOGIC HERE
-    # ==========================================================================
-    import asyncio
-
-    await asyncio.sleep(2)  # Simulate long processing
     result = f"I processed your message: '{text}'"
 
     # Send response via Slack Web API
@@ -191,7 +178,7 @@ async def _handle_voc_weekly_report_bg(payload: dict) -> dict[str, Any]:
 
     logger.info(f"Background processing weekly VOC report for user {user_id}")
 
-    from voc_analyst.jobs.voc_weekly import build_weekly_voc_report, _post_followups
+    from voc_analyst.jobs.voc_weekly import _post_followups, build_weekly_voc_report
 
     report = await build_weekly_voc_report(force_run=True)
     if report.get("status") != "ok":

@@ -34,6 +34,8 @@ slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
     process_before_response=True,  # Required for Lambda - must ack before timeout
+    token_verification_enabled=os.environ.get("SLACK_TOKEN_VERIFICATION_ENABLED", "true").lower()
+    != "false",
 )
 
 # Register error handler

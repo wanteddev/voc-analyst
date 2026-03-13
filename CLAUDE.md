@@ -1,60 +1,71 @@
 # CLAUDE.md
 
-이 저장소는 AWS Lambda에서 동작하는 Slack 봇 애플리케이션입니다. Litestar + Slack Bolt 기반이며 Lambda Web Adapter를 사용해 단일 컨테이너 이미지로 여러 함수를 운영합니다.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 아키텍처 요약
-- **Web Function**: Function URL로 HTTP 요청 처리
-- **Job Function**: EventBridge Scheduler로 예약 작업 실행
-- **Slack Background Function**: 장시간 Slack 작업 비동기 처리
-- 모든 함수가 동일한 이미지(단일 Docker 이미지)를 공유하고 `AWS_LWA_PASS_THROUGH_PATH`로 라우팅됩니다.
+## What This Is
 
-## 핵심 경로
-- `src/voc_monitoring/app.py`: Litestar 앱 엔트리
-- `src/voc_monitoring/slack/`: Slack Bolt 앱, 핸들러, 백그라운드 처리
-- `src/voc_monitoring/jobs/runner.py`: 예약 작업 로직
-- `template.yaml`: CloudFormation 스택 정의
-- `scripts/`: 배포/운영 스크립트 (`create_roles.sh`, `deploy_stack.sh`, `sync_env.py` 등)
-- `justfile`: 개발/배포 커맨드 모음
+Weekly VOC (Voice of Customer) analyst Slack bot on AWS Lambda. Pulls weekly VOC data from BigQuery, detects notable changes week-over-week, posts a summary to Slack, and for CRITICAL/MONITOR items posts LLM-generated follow-up analysis (via LaaS) in the thread.
 
-## 코딩 가이드 (Litestar)
-- 라우트 핸들러는 기본적으로 `async`로 작성합니다.
-- 동기 핸들러가 필요하면 `sync_to_thread`를 명시해 thread pool 실행 여부를 선언합니다.
-- `boto3`, `slack_sdk`처럼 동기 I/O 라이브러리는 `anyio.to_thread.run_sync`로 오프로딩합니다.
+## Architecture
 
-## Slack 롱러닝 처리 (Lambda + LWA)
-- Slack 요청은 3초 내 2xx/ack 응답이 원칙입니다. 이벤트는 빠르게 200 응답 후 실제 처리를 분리합니다.
-- 이 템플릿은 WebFunction이 수신 후 `SlackBgFunction`으로 작업을 위임하는 흐름을 기본으로 합니다.
-- 후속 응답은 `response_url` 또는 Slack Web API(`chat.postMessage`)로 전송합니다.
-- FaaS 환경에서 `process_before_response=True`를 사용하는 경우, 리스너는 3초 내 종료되어야 하므로 장시간 작업은 반드시 분리합니다.
+Three Lambda functions share a single Docker image (Litestar + Lambda Web Adapter). Routing is controlled by `AWS_LWA_PASS_THROUGH_PATH`:
 
-## 자주 쓰는 커맨드
-```bash
-uv sync --frozen
-just serve
-just build
-just deploy
-just url
-just create-roles
-just sync-env
-```
+- **WebFunction** — Function URL, handles Slack webhooks at `/slack/events`. Acks within 3s, delegates long work to SlackBgFunction via async Lambda invoke.
+- **JobFunction** — EventBridge Scheduler (Monday 9 AM KST) → `/events` → `run_weekly_voc_job`.
+- **SlackBgFunction** — `/slack/background`, processes tasks dispatched from WebFunction (mention-triggered reports, DMs, slash commands).
+
+Data flow for the weekly report:
+1. BigQuery: aggregate weekly VOC counts + negative counts by category
+2. Compare last two weeks, assign severity (critical/monitor/improved/stable)
+3. Post Slack summary with Block Kit formatting
+4. For CRITICAL/MONITOR items: fetch sample VOCs, call LaaS for analysis, post in thread
+
+## Key Paths
+
+- `src/voc_analyst/app.py` — Litestar app with route handlers
+- `src/voc_analyst/slack/app.py` — Slack Bolt app (`process_before_response=True`)
+- `src/voc_analyst/slack/handlers.py` — Slash commands + event handlers; `invoke_background()` dispatches to SlackBgFunction
+- `src/voc_analyst/slack/background.py` — Background task router and handlers
+- `src/voc_analyst/jobs/runner.py` — Scheduled job entry point
+- `src/voc_analyst/jobs/voc_weekly.py` — Core logic: BigQuery queries, change detection, Slack blocks, LaaS integration
+- `template.yaml` — CloudFormation stack (3 Lambdas + EventBridge Schedule)
+- `justfile` — Build/deploy/dev commands
+- `docs/VOC_ANALYST_ARCHITECTURE.md` — Detailed architecture reference
+
+## Commands
 
 ```bash
-just invoke-job
+uv sync --frozen            # Install dependencies
+just serve                  # Run local dev server (port 8080)
+just build                  # Build container image
+just deploy                 # Push to ECR + deploy CloudFormation
+just invoke-job             # Invoke job Lambda with sample payload
+just sync-env               # Sync LAMBDA_* vars from .env to template.yaml
+just url                    # Get deployed Function URL
+just deployed-version       # Show deployed image/tag/commit info
 ```
 
+### Tests & Quality
 
-## 환경 변수
-- `dot_env.example`을 복사해 `.env`를 만들고 값을 채웁니다.
-- 새 Lambda 환경변수는 `.env`에 `LAMBDA_` prefix로 추가한 뒤 `just sync-env`로 동기화합니다.
-- 별도 AWS 프로파일이 필요하면 `AWS_PROFILE=프로파일명 <command>` 형태로 실행합니다.
-
-## 테스트/품질
 ```bash
-uv run ruff check .
-uv run ruff format .
-uv run mypy src/
-uv run pytest
+uv run pytest                          # Run all tests
+uv run pytest tests/test_app.py        # Run single test file
+uv run pytest -k "test_name"           # Run single test by name
+uv run ruff check .                    # Lint
+uv run ruff format .                   # Format
+uv run mypy src/                       # Type check
 ```
 
-## 문서
-- `docs/SLACK_GUIDE.md`: 메시지 포맷, 실패 대응, 트러블슈팅
+pytest is configured with `asyncio_mode = "auto"` — async test functions work without extra decorators.
+
+## Coding Guidelines
+
+- Route handlers are `async` by default.
+- Sync I/O libraries (`boto3`, `slack_sdk`, `google-cloud-bigquery`) must be offloaded with `anyio.to_thread.run_sync`.
+- Slack handlers must ack within 3 seconds. Long-running work goes through `invoke_background()` → SlackBgFunction.
+- After background processing, respond via `response_url` (slash commands) or `slack_client.chat_postMessage` (events/DMs).
+- Python 3.13, ruff target `py313`, mypy strict mode.
+
+## Environment Variables
+
+Copy `dot_env.example` to `.env` and fill values. New Lambda env vars: add to `.env` with `LAMBDA_` prefix, then run `just sync-env`. Use `AWS_PROFILE=profile_name` for non-default AWS profiles.

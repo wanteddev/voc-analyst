@@ -3,10 +3,10 @@
 import logging
 from typing import Any
 
-from slack_bolt.request import BoltRequest
-from voc_analyst.slack.app import slack_app
-
 from litestar import Litestar, Request, Response, get, post
+from slack_bolt.request import BoltRequest
+
+from voc_analyst.slack.app import slack_app
 
 logger = logging.getLogger(__name__)
 

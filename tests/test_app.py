@@ -1,8 +1,8 @@
 from litestar.testing import TestClient
 from slack_bolt import BoltResponse
-from slack_bolt.async_app import AsyncBoltRequest
+from slack_bolt.request import BoltRequest
 
-from voc_monitoring.app import app  # noqa: E402
+from voc_analyst.app import app
 
 
 def test_health_endpoints() -> None:
@@ -16,14 +16,14 @@ def test_health_endpoints() -> None:
         assert resp.json() == {"status": "healthy"}
 
 
-def test_slack_events_dispatch_is_async(monkeypatch) -> None:
+def test_slack_events_dispatch(monkeypatch) -> None:
     seen: dict[str, object | None] = {"request": None}
 
-    async def fake_dispatch(request) -> BoltResponse:
+    def fake_dispatch(request: BoltRequest) -> BoltResponse:
         seen["request"] = request
-        return BoltResponse(status=200, body="ok", headers={"Content-Type": "text/plain"})
+        return BoltResponse(status=200, body="ok", headers={"Content-Type": ["text/plain"]})
 
-    monkeypatch.setattr("voc_monitoring.app.slack_app.async_dispatch", fake_dispatch)
+    monkeypatch.setattr("voc_analyst.app.slack_app.dispatch", fake_dispatch)
 
     with TestClient(app=app) as client:
         resp = client.post(
@@ -34,5 +34,5 @@ def test_slack_events_dispatch_is_async(monkeypatch) -> None:
 
     assert resp.status_code == 200
     assert resp.text == "ok"
-    assert isinstance(seen["request"], AsyncBoltRequest)
-    assert seen["request"].raw_body == '{"event_id":"evt-1"}'
+    assert isinstance(seen["request"], BoltRequest)
+    assert seen["request"].body == {"event_id": "evt-1"}

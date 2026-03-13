@@ -31,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 class WeeklyVOC:
     week_start: date
     week_end: date | None
-    counts: dict[str, "VOCCounts"]
+    counts: dict[str, VOCCounts]
 
 
 @dataclass(frozen=True)
