@@ -104,6 +104,7 @@ attach_policy_if_not_attached "$WEB_ROLE_NAME" "arn:aws:iam::aws:policy/AWSLambd
 JOB_ROLE_NAME="${STACK_NAME}-job-role"
 create_role_if_not_exists "$JOB_ROLE_NAME" "$LAMBDA_TRUST_POLICY" "Lambda execution role for $STACK_NAME job function"
 attach_policy_if_not_attached "$JOB_ROLE_NAME" "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+put_inline_policy "$JOB_ROLE_NAME" "${STACK_NAME}-ssm-read" "$SSM_READ_POLICY"
 
 
 # 3. Scheduler 역할
