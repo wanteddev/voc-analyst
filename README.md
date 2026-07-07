@@ -1,412 +1,179 @@
 # VOC Analyst
 
-Weekly VOC analyst bot
+Voice of Customer 모니터링 시스템. Zendesk 유입 문의를 카테고리·감정별로 분류·집계하고, 두 채널로 전달합니다.
 
-## 목차
+- **Slack 봇 (주간)** — 매주 월요일 아침 `#voc-*` 채널로 주간 변화 요약을 자동 전송
+- **웹 대시보드 (실시간)** — Next.js 앱에서 급증 카테고리·부정 감정 변화·신규 키워드를 필터링해서 확인, 채팅 에이전트로 질의도 가능
 
-- [아키텍처](#아키텍처)
-- [사전 요구사항](#사전-요구사항)
-- [빠른 시작](#빠른-시작)
-- [사용 가능한 명령어](#사용-가능한-명령어)
-- [프로젝트 구조](#프로젝트-구조)
-- [문서](#문서)
-- [엔드포인트](#엔드포인트)
-- [설정](#설정)
-  - [환경 변수](#환경-변수)
-  - [CloudFormation 파라미터](#cloudformation-파라미터)
-  - [Lambda 환경변수 추가하기](#lambda-환경변수-추가하기)
-- [VOC 주간 모니터링 설계](#voc-주간-모니터링-설계)
-- [작업 로직 추가하기](#작업-로직-추가하기)
-- [Slack 봇 설정](#slack-봇-설정)
-- [Slack 핸들러 추가하기](#slack-핸들러-추가하기)
-- [라이선스](#라이선스)
+**리포**: [`wanteddev/voc-analyst`](https://github.com/wanteddev/voc-analyst)
+**배포**: 두 서비스 모두 Backyard(사내 Kubernetes 샌드박스)에 배포
+
+---
 
 ## 아키텍처
 
-[Litestar](https://litestar.dev/)로 구축되고 [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter)를 사용하여 AWS Lambda에 배포되는 서버리스 애플리케이션입니다.
+```
+                    ┌─────────────────────────────┐
+                    │  wanted_ml.zendesk_voc_     │  ← 원본 (분류·감정 완료)
+                    │  classified                 │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  BigQuery Views (bq_views/) │
+                    │  · voc_daily                │
+                    │  · voc_surge_score          │
+                    │  · voc_surge_score_at(TVF)  │
+                    │  · voc_keyword_trend        │
+                    └──────┬───────────────┬──────┘
+                           │               │
+              ┌────────────▼────┐    ┌─────▼────────────────┐
+              │ Slack Bot       │    │ Next.js Dashboard    │
+              │ (Python/Litestar)│    │ (webapp/)            │
+              │ Backyard        │    │ Backyard proj-a2qqw2 │
+              │ 주간 잡         │    │ Chat: GPT-5-mini     │
+              └─────────┬───────┘    └─────┬────────────────┘
+                        │                  │
+                        ▼                  ▼
+                    #voc-*            내부 URL 접속
+                    Slack 채널        (SSO 필요)
+```
 
-**구성 요소:**
-- **Web Function**: Function URL을 통해 HTTP 요청 처리
+## 리포 구조
 
-- **Job Function**: EventBridge Scheduler로 예약된 작업 실행
+```
+voc-analyst/
+├── src/voc_analyst/         # Slack 봇 (Python/Litestar)
+│   ├── app.py               # HTTP 앱
+│   ├── jobs/                # 스케줄 잡 (voc_weekly, voc_daily, scheduler)
+│   └── slack/               # 슬래시 커맨드·이벤트 핸들러
+├── webapp/                  # 대시보드 (Next.js 14 App Router)
+│   ├── src/app/product/     # Product Insights 페이지
+│   ├── src/app/api/         # /api/drilldown, /api/chat, /api/jira/create
+│   ├── src/components/      # StatusOverview, WatchGrid, DrilldownPanel 등
+│   └── src/lib/             # queries.ts (BQ), bq.ts (client), level.ts 등
+├── bq_views/                # BigQuery view/TVF 정의 SQL
+├── dashboards/              # PRD 문서 (product-insights, cs-live, executive)
+└── docs/                    # 마이그레이션·계획·Slack 셋업 가이드
+```
 
-- **Slack Background Function**: 장시간 Slack 작업을 비동기로 처리
-- **Single Container Image**: 모든 함수가 동일한 Docker 이미지 공유
+## 데이터 소스
 
-## 사전 요구사항
+BigQuery 프로젝트: `wanted-data`
 
-- [uv](https://docs.astral.sh/uv/) - Python 패키지 관리자
-- [just](https://just.systems/) - 커맨드 러너
-- [Docker](https://www.docker.com/) - 컨테이너 이미지 빌드용
-- 적절한 자격 증명이 구성된 AWS CLI
+| 리소스 | 용도 |
+|---|---|
+| `wanted_ml.zendesk_voc_classified` | 원본 (Zendesk 티켓 + 카테고리 3단·감정 분류) |
+| `wanted_ml_voc.voc_daily` | 일자·카테고리·감정별 티켓 수 집계 (view) |
+| `wanted_ml_voc.voc_surge_score` | 카테고리별 급증 점수 (오늘 기준 view) |
+| `wanted_ml_voc.voc_surge_score_at(DATE)` | 임의 시점 스냅샷 (TVF, 최대 180일) |
+| `wanted_ml_voc.voc_keyword_trend` | 주간 키워드 언급 트렌드 |
 
-## 빠른 시작
+---
 
-### 1. 의존성 설치
+## 웹 대시보드 (webapp/)
+
+**배포**: Backyard `proj-a2qqw2` · https://prj-backend-a2qqw2.lab.wntd.co/product
+
+**주요 기능**
+- **주간 시그널** — 급증/주의/안정/개선 4단 KPI. 블럭 클릭 → 상단 필터 반영
+- **카테고리 목록** — 급증한 카테고리 카드 그리드. 클릭 시 드릴다운 오픈 (12주 트렌드 + 상위 키워드 + 원문 티켓 · 원문 클립보드 복사, 트렌드 포인트 클릭 → 주간 필터)
+- **부정 감정 변화** — 최근 7일 부정률 vs 직전 4주 평시 (%p)
+- **신규 등장 키워드** — 직전 2주엔 없던 키워드가 최근 2주에 급등한 것들
+- **필터 (sticky bar)** — 유저/기업, 상태(다중), 중분류·소분류(카드 클릭으로 추가), 기준일 (어제 default, 최근 6개월)
+- **채팅 에이전트** — 우측 사이드바 · OpenAI GPT-5-mini · SSE 스트리밍 · BQ + 원문 티켓 조회 도구 · CSV 다운로드
+- **라이트/다크 테마 토글**
+
+**로컬 개발**
+
+```bash
+cd webapp
+npm install
+export GCP_SA_KEY="$(cat ~/voc-bq-sa.json)"
+export BQ_PROJECT=wanted-data
+export OPENAI_API_KEY=sk-...
+npm run dev
+```
+
+**Backyard 배포**
+
+```bash
+cd webapp
+docker buildx build --platform=linux/arm64 --no-cache \
+  -t lab.wntd.co/proj-a2qqw2/backend:latest --push .
+# → Backyard MCP로 restart_component proj-a2qqw2 backend
+```
+
+**BQ Quota 관리**
+- 페이지 캐시 `revalidate = 60` (초) — 필터 반복 클릭 시 재조회 최소화
+- 단일 스냅샷 원자성 (`fetchAllSurges` → in-memory 파생) — 카운트 불일치 방지
+- Quota 초과 시 `app/product/error.tsx`가 사용자 친화적 안내 표시 (매일 UTC 자정에 자동 리셋)
+
+---
+
+## Slack 봇 (src/voc_analyst/)
+
+**Litestar 앱**. Backyard에서 Python 컨테이너로 구동, 스케줄러가 매주 월요일 오전 주간 리포트를 생성해 Slack에 전송.
+
+**주간 알림 흐름**
+1. `voc_weekly` 잡 → 비교 주 vs 기준 주 카테고리별 볼륨·부정 비율 diff 계산
+2. Slack 채널로 요약 메시지 전송 (블럭 UI)
+3. CRITICAL/MONITOR 항목은 스레드로 LaaS 프리셋 후속 분석 자동 요청
+
+**변화 감지 기준**
+- **CRITICAL**: 증가≥30% 또는 부정비율+20%p, VOC≥20
+- **MONITOR**: 증가≥20% 또는 부정비율+10%p, VOC≥10
+- **IMPROVED**: 감소≥20%, VOC≥10
+- **STABLE**: 그 외
+
+**로컬 실행**
 
 ```bash
 uv sync --frozen
+just serve   # http://localhost:8080
 ```
 
-### 2. 로컬 실행
+**주간 메시지 강제 실행**
 
 ```bash
-just serve
-```
-
-http://localhost:8080 에서 앱에 접근할 수 있습니다.
-
-### 3. IAM 역할 생성 (첫 배포 시 1회)
-
-```bash
-just create-roles
-```
-
-### 4. 빌드 및 배포
-
-```bash
-# 컨테이너 이미지 빌드
-just build
-
-# AWS에 배포
-just deploy
-
-# 배포된 URL 확인
-just url
-```
-
-## 사용 가능한 명령어
-
-| 명령어 | 설명 |
-|--------|------|
-| `just serve` | 로컬 개발 서버 실행 |
-| `just build [tag]` | 컨테이너 이미지 빌드 |
-| `just deploy [tag]` | ECR에 푸시하고 스택 배포 |
-| `just url` | 배포된 Function URL 확인 |
-| `just invoke-job` | 예약된 작업 수동 실행 |
-| `just deployed-version` | 배포된 이미지 정보 표시 |
-| `just lock` | 의존성 lockfile 업데이트 |
-| `just create-roles` | 필요한 IAM 역할 생성 (첫 배포 전 1회) |
-| `just sync-env` | `.env`의 LAMBDA_* 변수를 CloudFormation에 동기화 |
-
-## 로컬 테스트 메시지 보내기
-
-주간 VOC 메시지를 **로컬에서 강제 실행**하여 Slack 채널로 테스트 전송합니다.
-
-```bash
-set -a
-source .env
-set +a
+set -a; source .env; set +a
 uv run python - <<'PY'
 import asyncio
+from voc_analyst.jobs.voc_weekly import build_weekly_voc_report, send_slack_notification, _post_followups
 import os
-from voc_analyst.jobs.voc_weekly import (
-    build_weekly_voc_report,
-    send_slack_notification,
-    _post_followups,
-)
 
 async def main():
-    channel = os.environ.get("VOC_SLACK_CHANNEL") or os.environ.get("LAMBDA_VOC_SLACK_CHANNEL")
-    if not channel:
-        raise SystemExit("VOC_SLACK_CHANNEL or LAMBDA_VOC_SLACK_CHANNEL is required")
-
+    channel = os.environ["VOC_SLACK_CHANNEL"]
     report = await build_weekly_voc_report(force_run=True)
-    if report.get("status") != "ok":
-        print(report)
-        return
-    if report.get("changes", 0) == 0:
-        print({"status": "ok", "changes": 0})
-        return
-
-    thread_ts = await send_slack_notification(channel, report.get("blocks", []))
-    if thread_ts:
-        await _post_followups(
-            channel=channel,
-            thread_ts=thread_ts,
-            prev=report["prev"],
-            last=report["last"],
-            changes=report["changes_list"],
-        )
-    print({"status": "ok", "changes": report.get("changes", 0)})
-
+    if report.get("status") == "ok" and report.get("changes", 0) > 0:
+        ts = await send_slack_notification(channel, report["blocks"])
+        await _post_followups(channel=channel, thread_ts=ts, **report)
 asyncio.run(main())
 PY
 ```
 
-필수 환경변수는 `.env`에 설정합니다:
-- `SLACK_BOT_TOKEN`
-- `VOC_SLACK_CHANNEL` (또는 `LAMBDA_VOC_SLACK_CHANNEL`)
-
-## 프로젝트 구조
-
-```
-voc_analyst/
-├── src/voc_analyst/
-│   ├── __init__.py
-│   ├── app.py              # Litestar 애플리케이션
-
-│   └── jobs/
-│       ├── __init__.py
-│       └── runner.py       # 예약 작업 핸들러
-
-│   └── slack/
-│       ├── __init__.py
-│       ├── app.py          # Slack Bolt 앱 설정
-│       ├── handlers.py     # 커맨드 & 이벤트 핸들러
-│       └── background.py   # 백그라운드 작업 프로세서
-├── scripts/
-│   ├── create_roles.sh     # IAM 역할 생성 스크립트
-│   ├── sync_env.py         # 환경변수 동기화 스크립트
-│   └── ...                 # 빌드/배포 스크립트
-├── dot_env.example         # 환경변수 예시 파일 (cp dot_env.example .env)
-├── docs/
-│   └── SLACK_GUIDE.md      # Slack 알림 포맷 및 실패 대응 가이드
-├── template.yaml           # CloudFormation 스택
-├── Dockerfile
-├── pyproject.toml
-└── justfile
-```
-
 ## 문서
 
-- [Slack 봇 가이드](docs/SLACK_GUIDE.md) - 메시지 포맷 예시, 실패 대응 매뉴얼, 트러블슈팅
-
-## 엔드포인트
-
-| 엔드포인트 | 메서드 | 설명 |
-|------------|--------|------|
-| `/` | GET | 헬스 체크 |
-| `/healthz` | GET | 로드 밸런서 헬스 체크 |
-
-| `/events` | POST | EventBridge 이벤트 핸들러 (job 함수 전용) |
-
-| `/slack/events` | POST | Slack 웹훅 엔드포인트 (커맨드, 이벤트, 인터랙션) |
-| `/slack/background` | POST | 백그라운드 작업 프로세서 (내부 사용) |
-
-## 설정
-
-### 환경 변수
-
-| 변수 | 설명 | 기본값 |
-|------|------|--------|
-| `AWS_PROFILE` | AWS CLI 프로필 | `default` |
-| `AWS_REGION` | AWS 리전 | `ap-northeast-2` |
-| `STACK_NAME` | CloudFormation 스택 이름 | `voc_analyst` |
-
-### CloudFormation 파라미터
-
-| 파라미터 | 설명 |
-|----------|------|
-| `ImageUri` | ECR 이미지 참조 |
-| `WebFunctionRoleArn` | Web 함수용 IAM 역할 |
-
-| `JobFunctionRoleArn` | Job 함수용 IAM 역할 |
-| `SchedulerRoleArn` | EventBridge Scheduler용 IAM 역할 |
-| `ScheduleExpression` | 예약 작업용 Cron 표현식 |
-
-| `SlackBotToken` | Slack Bot User OAuth Token (xoxb-...) |
-| `SlackSigningSecret` | 요청 검증용 Slack Signing Secret |
-| `SlackBgFunctionRoleArn` | Slack 백그라운드 함수용 IAM 역할 |
-
-### Lambda 환경변수 추가하기
-
-앱 개발 중 새로운 환경변수(예: API 키, 데이터베이스 URL)를 추가하려면:
-
-**1. `.env` 파일에 `LAMBDA_` prefix로 변수 추가**
-
-```bash
-# .env
-LAMBDA_DATABASE_URL=postgresql://user:pass@host:5432/db
-LAMBDA_OPENAI_API_KEY=sk-...
-LAMBDA_FEATURE_FLAG=true
-```
-
-**2. 동기화 실행**
-
-```bash
-just sync-env
-```
-
-이 명령은 자동으로:
-- `template.yaml`에 CloudFormation 파라미터 추가 (예: `DatabaseUrl`)
-- Lambda 함수들의 환경변수에 참조 추가 (예: `DATABASE_URL: !Ref DatabaseUrl`)
-- `deploy_stack.sh`에 파라미터 전달 로직 추가
-
-**3. 배포**
-
-```bash
-just build && just deploy
-```
-
-**변환 규칙:**
-| .env 변수 | CFN 파라미터 | Lambda 환경변수 |
-|-----------|--------------|-----------------|
-| `LAMBDA_DATABASE_URL` | `DatabaseUrl` | `DATABASE_URL` |
-| `LAMBDA_OPENAI_API_KEY` | `OpenaiApiKey` | `OPENAI_API_KEY` |
-
-## VOC 주간 모니터링 설계
-
-### 데이터 소스 (BigQuery)
-- 테이블: `wanted-data.wanted_ml.zendesk_voc_classified`
-- 집계: 주차별(category1/2/3) VOC 총량과 부정 건수
-- 부정 정의: `overall_emotion = '부정'`
-
-### 변화 감지 기준
-- **CRITICAL**: (증가≥30% 또는 부정비율+20%p) & 비교주 또는 기준주 VOC≥20
-- **MONITOR**: (증가≥20% 또는 부정비율+10%p) & 비교주 또는 기준주 VOC≥10
-- **IMPROVED**: 감소≥20% & 비교주 또는 기준주 VOC≥10
-- **STABLE**: 그 외
-
-### Slack 알림 흐름
-1) 월요일 스케줄 실행 → 요약 메시지 전송
-2) 멘션 요청 시 동일한 요약 메시지 전송
-3) CRITICAL/MONITOR 항목은 스레드로 후속 분석 메시지 전송 (LaaS 프리셋)
-
-### LaaS 프리셋 요약
-- 엔드포인트: `/api/preset/v2/chat/completions`
-- 프리셋 해시: `90571f07e6b60e047620162ecc29b423dba8280aba60dba503aac082082ad0c4`
-- 입력: 주차별 샘플(비교 주 / 기준 주) + 변화 요약
-- 출력: 요약 / 대표 예시 / 원인 가설 / 후속 조치
-
-
-## 작업 로직 추가하기
-
-`src/voc_analyst/jobs/runner.py` 파일을 수정합니다:
-
-```python
-async def run_scheduled_job(event: dict[str, Any]) -> dict[str, Any]:
-    # 예약 작업 로직을 여기에 작성
-    # 예시:
-    # - 외부 API에서 데이터 가져오기
-    # - 데이터 처리 및 변환
-    # - 알림 전송
-    # - 데이터베이스 레코드 업데이트
-
-    return {"status": "ok"}
-```
-
-
-## Slack 봇 설정
-
-### 1. Slack 앱 생성
-
-1. [Slack API Apps](https://api.slack.com/apps)로 이동
-2. **Create New App** → **From scratch** 클릭
-3. 앱 이름 입력 및 워크스페이스 선택
-
-### 2. 봇 권한 설정
-
-**OAuth & Permissions**로 이동하여 Bot Token Scopes 추가:
-
-| Scope | 설명 |
-|-------|------|
-| `chat:write` | 메시지 전송 |
-| `commands` | 슬래시 커맨드 추가 |
-| `app_mentions:read` | @멘션 수신 |
-| `im:history` | DM 메시지 읽기 |
-| `im:write` | DM 전송 |
-
-### 3. 이벤트 활성화
-
-1. **Event Subscriptions**로 이동
-2. **Enable Events**를 On으로 토글
-3. **Request URL** 설정: `{Function URL}slack/events`
-4. 봇 이벤트 구독:
-   - `app_mention`
-   - `message.im`
-
-### 4. 슬래시 커맨드 추가
-
-**Slash Commands** → **Create New Command**로 이동:
-
-| 커맨드 | Request URL | 설명 |
-|--------|-------------|------|
-| `/hello` | `{Function URL}slack/events` | 인사 커맨드 예시 |
-| `/longtask` | `{Function URL}slack/events` | 백그라운드 작업 예시 |
-
-### 5. 워크스페이스에 설치
-
-1. **Install App**으로 이동
-2. **Install to Workspace** 클릭
-3. **Bot User OAuth Token** 복사 (`xoxb-`로 시작)
-
-### 6. Signing Secret 확인
-
-1. **Basic Information**으로 이동
-2. **Signing Secret** 복사
-
-### 7. Slack 자격 증명으로 배포
-
-환경변수로 Slack 토큰을 설정한 후 배포합니다:
-
-```bash
-# 환경변수 설정 후 배포
-export SLACK_BOT_TOKEN=xoxb-your-token
-export SLACK_SIGNING_SECRET=your-signing-secret
-just deploy
-```
-
-또는 한 줄로:
-
-```bash
-SLACK_BOT_TOKEN=xoxb-... SLACK_SIGNING_SECRET=... just deploy
-```
-
-## Slack 핸들러 추가하기
-
-### 슬래시 커맨드
-
-`src/voc_analyst/slack/handlers.py` 파일을 수정합니다:
-
-```python
-@slack_app.command("/mycommand")
-def handle_my_command(ack: Ack, command: dict, say: Say) -> None:
-    ack()  # 3초 이내에 응답
-    say(f"안녕하세요 <@{command['user_id']}>!")
-```
-
-### 이벤트 핸들러
-
-```python
-@slack_app.event("app_mention")
-def handle_mention(event: dict, say: Say) -> None:
-    say(f"멘션하셨네요: {event.get('text')}")
-```
-
-### 백그라운드 작업 (장시간 실행)
-
-3초를 초과하는 작업은 백그라운드 처리를 사용합니다:
-
-```python
-@slack_app.command("/slow-task")
-def handle_slow_task(ack: Ack, command: dict) -> None:
-    ack("처리 중... :hourglass:")  # 즉시 응답
-
-    # 백그라운드 Lambda로 오프로드
-    invoke_background(
-        task_type="my_task",
-        payload={
-            "user_id": command["user_id"],
-            "channel_id": command["channel_id"],
-            "response_url": command["response_url"],
-        },
-    )
-```
-
-그런 다음 `background.py`에 핸들러를 추가합니다:
-
-```python
-async def _handle_my_task(payload: dict) -> dict[str, Any]:
-    # 장시간 실행 로직 (최대 2분)
-    result = await some_slow_operation()
-
-    # response_url을 통해 응답 전송
-    async with httpx.AsyncClient() as client:
-        await client.post(payload["response_url"], json={"text": result})
-
-    return {"status": "ok"}
-```
+- [dashboards/product-insights.md](dashboards/product-insights.md) — 대시보드 PRD
+- [dashboards/cs-live.md](dashboards/cs-live.md) — CS Live 페이지 계획 (미구현)
+- [dashboards/executive.md](dashboards/executive.md) — Executive 페이지 계획 (미구현)
+- [docs/MIGRATION.md](docs/MIGRATION.md) — Metabase → 커스텀 웹앱 이관 노트
+- [docs/PLAN_PRODUCT_INSIGHTS.md](docs/PLAN_PRODUCT_INSIGHTS.md) — Product Insights 상세 계획
+- [docs/ROADMAP.md](docs/ROADMAP.md) — 로드맵
+- [docs/SLACK_GUIDE.md](docs/SLACK_GUIDE.md) — Slack 알림 포맷·트러블슈팅
+- [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) — Slack 봇 초기 셋업
+
+## 환경변수
+
+**웹앱 (webapp/)**
+- `GCP_SA_KEY` — BigQuery 서비스 계정 JSON (Backyard secret)
+- `BQ_PROJECT` — `wanted-data`
+- `OPENAI_API_KEY` — GPT-5-mini 채팅 에이전트용
+
+**Slack 봇 (src/voc_analyst/)**
+- `SLACK_BOT_TOKEN` — Bot User OAuth Token (`xoxb-...`)
+- `SLACK_SIGNING_SECRET` — 요청 검증용
+- `VOC_SLACK_CHANNEL` — 알림 채널 ID
+- `LAAS_API_KEY` — 후속 분석 프리셋용
 
 ## 라이선스
 
