@@ -1,7 +1,9 @@
 # voc-dashboard webapp
 
 Next.js 14 App Router + BigQuery(@google-cloud/bigquery) 대시보드.
-Backyard `proj-a2qqw2` 백엔드에 배포됨.
+Backyard `proj-a2qqw2` **frontend** 컴포넌트에 배포됨.
+
+**운영 URL**: https://prj-frontend-a2qqw2.lab.wntd.co/product
 
 ## 페이지
 
@@ -28,10 +30,10 @@ npm run dev
 
 ```bash
 docker buildx build --platform=linux/arm64 --no-cache \
-  -t lab.wntd.co/proj-a2qqw2/backend:latest --push .
+  -t lab.wntd.co/proj-a2qqw2/frontend:latest --push .
 ```
 
-Backyard MCP `restart_component`으로 롤아웃 트리거. 이미지 sha 확인은 `list_images`.
+push 후 Backyard MCP `restart_component(name="proj-a2qqw2", component="frontend")`으로 롤아웃 트리거. 이미지 sha 확인은 `list_images`. backend 컴포넌트는 비활성화 상태이므로 frontend 태그만 관리하면 됨.
 
 ## 데이터 소스
 

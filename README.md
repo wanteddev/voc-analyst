@@ -70,6 +70,8 @@ voc-analyst/
 
 ---
 
+**운영 URL**: https://prj-frontend-a2qqw2.lab.wntd.co/product (사내망)
+
 ## 3. 웹 대시보드 로컬 실행
 
 ```bash
@@ -112,19 +114,21 @@ just serve                # http://localhost:8080
 
 ### 웹 대시보드 → Backyard `proj-a2qqw2`
 
+frontend 컴포넌트만 사용합니다 (backend 컴포넌트는 비활성화됨).
+
 ```bash
 cd webapp
 docker buildx build --platform=linux/arm64 --no-cache \
-  -t lab.wntd.co/proj-a2qqw2/backend:latest --push .
+  -t lab.wntd.co/proj-a2qqw2/frontend:latest --push .
 ```
 
-푸시 후 **Backyard에서 backend 컴포넌트 restart** (Claude Code에서 Backyard MCP `restart_component` 또는 Backyard 콘솔). `:latest` 태그 webhook이 항상 재배포를 보장하지 않으므로 restart는 필수입니다.
+푸시 후 **Backyard에서 frontend 컴포넌트 restart** (Claude Code에서 Backyard MCP `restart_component` 또는 Backyard 콘솔). `:latest` 태그 webhook이 항상 재배포를 보장하지 않으므로 restart는 필수입니다.
 
 체크리스트:
 - [ ] `npm run typecheck` 통과
 - [ ] `npm run build` 로컬 통과 (webpack 에러 조기 발견)
 - [ ] push 후 restart → 새 이미지 sha 확인 (`list_images` / 콘솔)
-- [ ] https://prj-backend-a2qqw2.lab.wntd.co/product 접속 확인
+- [ ] https://prj-frontend-a2qqw2.lab.wntd.co/product 접속 확인
 
 주의: **arm64 필수**. amd64 이미지는 Backyard에서 `exec format error`로 즉사합니다.
 
