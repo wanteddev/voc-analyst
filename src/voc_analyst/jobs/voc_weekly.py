@@ -12,7 +12,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import anyio
-import boto3
 import httpx
 from google.cloud import bigquery  # type: ignore
 from google.oauth2 import service_account
@@ -20,9 +19,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 DEFAULT_TIMEZONE = "Asia/Seoul"
-DEFAULT_SSM_CREDENTIALS_KEY = "/DATA/WWW/GOOGLE/SERVICE_CREDENTIALS"
 DEFAULT_LAAS_PRESET_HASH = "90571f07e6b60e047620162ecc29b423dba8280aba60dba503aac082082ad0c4"
-DEFAULT_LAAS_API_KEY_SSM_KEY = "/DATA/PIPELINE/API_KEY/OPENAI"
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
@@ -84,31 +81,18 @@ def _force_run() -> bool:
     return os.environ.get("VOC_FORCE_RUN", "").strip().lower() in {"1", "true", "yes"}
 
 
-def _fetch_ssm_parameter(name: str) -> str:
-    ssm = boto3.client("ssm")
-    resp = ssm.get_parameter(Name=name, WithDecryption=True)
-    return resp["Parameter"]["Value"]
-
-
 def _load_laas_api_key() -> str | None:
-    api_key = os.environ.get("LAMBDA_LAAS_API_KEY") or os.environ.get("LAAS_API_KEY")
-    if api_key:
-        return api_key
-    ssm_key = os.environ.get("LAMBDA_LAAS_API_KEY_SSM_KEY") or os.environ.get(
-        "LAAS_API_KEY_SSM_KEY", DEFAULT_LAAS_API_KEY_SSM_KEY
-    )
-    try:
-        return _fetch_ssm_parameter(ssm_key)
-    except Exception as exc:  # pragma: no cover (defensive)
-        logger.error("Failed to load LaaS API key from SSM", extra={"error": str(exc)})
-        return None
+    # Backyard secret으로 LAAS_API_KEY 주입. AWS SSM 조회 폐지.
+    return os.environ.get("LAAS_API_KEY") or os.environ.get("LAMBDA_LAAS_API_KEY")
 
 
 def _load_google_credentials() -> dict[str, Any]:
-    raw_json = os.environ.get("VOC_BIGQUERY_CREDENTIALS_JSON")
+    # Backyard secret GCP_SA_KEY (JSON string) 사용. AWS SSM 조회 폐지.
+    raw_json = os.environ.get("GCP_SA_KEY") or os.environ.get("VOC_BIGQUERY_CREDENTIALS_JSON")
     if not raw_json:
-        ssm_key = os.environ.get("VOC_GOOGLE_CREDENTIALS_SSM_KEY", DEFAULT_SSM_CREDENTIALS_KEY)
-        raw_json = _fetch_ssm_parameter(ssm_key)
+        raise RuntimeError(
+            "GCP_SA_KEY not set (Backyard secret required for BQ client)"
+        )
     return json.loads(raw_json)
 
 

@@ -1,26 +1,44 @@
-FROM --platform=linux/arm64/v8 public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 AS lwa
+# Backyard 배포용 arm64 Dockerfile
+# 기존 Lambda용 Dockerfile은 폐기 예정. Week 2 이관 완료 후 삭제.
+# 참고: wanted-insights-bot 메모리 backyard_arm64.md — amd64 push 시 exec format error.
 
-FROM --platform=linux/arm64/v8 public.ecr.aws/lambda/python:3.13
+FROM --platform=linux/arm64 python:3.13-slim AS base
 
-# Install AWS Lambda Web Adapter extension
-COPY --from=lwa /lambda-adapter /opt/extensions/lambda-adapter
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
 
-# Install uv package manager following official guidance
-RUN pip install --no-cache-dir uv
+# uv 설치 (빠른 의존성 해결)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-WORKDIR /var/task
+WORKDIR /app
 
-# Copy project metadata and install dependencies using the lockfile for reproducibility
-COPY pyproject.toml ./
-COPY README.md ./README.md
-COPY requirements.lock ./requirements.lock
-RUN cp requirements.lock uv.lock
+# 시스템 패키지 (curl은 healthcheck, ca-certificates는 gRPC/BQ)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-# Copy application source (editable install target)
-COPY src/ ./src
+# 의존성 선반영 (lockfile 기반 재현 빌드)
+# README.md는 pyproject.toml [project].readme 참조로 uv 빌드 시 필요
+COPY pyproject.toml uv.lock requirements.lock README.md ./
+RUN uv sync --frozen --no-install-project
 
+# 소스 복사
+COPY src/ ./src/
+# 프로젝트 자체 install (편집 가능)
 RUN uv sync --frozen
 
-# Expose application via uvicorn (Lambda Web Adapter handles the HTTP bridge)
-ENTRYPOINT ["/var/task/.venv/bin/python", "-m", "uvicorn"]
-CMD ["voc_analyst.app:app", "--host", "0.0.0.0", "--port", "8080"]
+# non-root 유저 (Claude CLI 등이 root 거부하는 케이스 대응 — 메모리 claude_cli_nonroot.md 참고)
+RUN useradd -m -u 1000 bot && chown -R bot:bot /app
+USER bot
+
+EXPOSE 8080
+
+# healthcheck (Litestar /healthz)
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8080/healthz || exit 1
+
+# scheduler + web server 동거 실행
+CMD ["uv", "run", "--frozen", "uvicorn", "voc_analyst.app:app", "--host", "0.0.0.0", "--port", "8080"]

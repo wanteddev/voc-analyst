@@ -1,60 +1,43 @@
 """Slack event and command handlers."""
 
-import json
+import asyncio
 import logging
-import os
 
-import boto3
-from botocore.exceptions import ClientError
 from slack_bolt import Ack, BoltContext, Say
 
 from voc_analyst.slack.app import slack_app
+from voc_analyst.slack.background import process_background_task
 
 logger = logging.getLogger(__name__)
 
-lambda_client = boto3.client("lambda")
-BACKGROUND_FUNCTION_NAME = os.environ.get("SLACK_BG_FUNCTION_NAME", "")
-
 
 class SlackBackgroundError(Exception):
-    """Raised when background Lambda invocation fails."""
+    """Raised when background task fails."""
 
     pass
 
 
 def invoke_background(task_type: str, payload: dict) -> None:
     """
-    Invoke background Lambda for long-running tasks.
+    Dispatch a background Slack task to the in-process worker.
 
-    Args:
-        task_type: Type of background task to execute
-        payload: Data to pass to background handler
-
-    Raises:
-        SlackBackgroundError: If Lambda invocation fails
+    Backyard 컨테이너 단일 프로세스로 이관됨. 기존 Lambda invoke 대체.
+    현재 이벤트 루프에 fire-and-forget task로 스케줄.
     """
-    if not BACKGROUND_FUNCTION_NAME:
-        logger.warning("SLACK_BG_FUNCTION_NAME not set, skipping background invoke")
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        # No running loop (rare, e.g. import time) — create task synchronously
+        logger.warning("no event loop for invoke_background(%s)", task_type)
         return
 
-    try:
-        response = lambda_client.invoke(
-            FunctionName=BACKGROUND_FUNCTION_NAME,
-            InvocationType="Event",  # Async invocation
-            Payload=json.dumps({"task_type": task_type, "payload": payload}),
-        )
+    async def _run() -> None:
+        try:
+            await process_background_task({"task_type": task_type, "payload": payload})
+        except Exception:
+            logger.exception("background task %s failed", task_type)
 
-        status_code = response.get("StatusCode", 0)
-        if status_code not in (200, 202):
-            logger.error(f"Background Lambda returned unexpected status: {status_code}")
-            raise SlackBackgroundError(f"Background invocation failed with status {status_code}")
-
-        logger.info(f"Background task '{task_type}' invoked successfully")
-
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        logger.error(f"Failed to invoke background Lambda: {error_code} - {e}")
-        raise SlackBackgroundError(f"Failed to invoke background Lambda: {error_code}") from e
+    loop.create_task(_run())
 
 
 # =============================================================================

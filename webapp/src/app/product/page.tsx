@@ -1,0 +1,251 @@
+import {
+  fetchAllSurges,
+  deriveStatusSummary,
+  deriveGridSurges,
+  fetchSegSummary,
+  fetchNewKeywords,
+  fetchNegDelta,
+  fetchMtdSummary,
+  fetchLastDataDate,
+  parseAsOfDate,
+  windowLabel,
+  mtdLabel,
+  segToCategory1,
+  kstYesterday,
+  LEVEL_KEY_TO_SURGE,
+  type SegKey,
+  type SurgeLevel,
+} from '@/lib/queries';
+import type { ProductFilters } from '@/lib/product-url';
+import { WatchGrid } from '@/components/WatchGrid';
+import { NegDelta } from '@/components/NegDelta';
+import { SegFilter } from '@/components/SegFilter';
+import { LevelPill } from '@/components/LevelPill';
+import { CategoryChip } from '@/components/CategoryChip';
+import { StatusOverview } from '@/components/StatusOverview';
+import { DateFilter } from '@/components/DateFilter';
+
+// revalidate 60초 · URL 조합별 캐시 → 필터 반복 클릭 시 BQ 재조회 최소화.
+// (일일 quota 초과 방지)
+export const revalidate = 60;
+
+type PageProps = {
+  searchParams: Promise<{
+    seg?: string;
+    level?: string;
+    asOf?: string;
+    cat2?: string;
+    cat3?: string;
+  }>;
+};
+
+function kstToday(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
+function parseLevels(v: string | undefined): SurgeLevel[] {
+  if (!v || v === 'all') return [];
+  const out: SurgeLevel[] = [];
+  const seen = new Set<SurgeLevel>();
+  for (const raw of v.split(',')) {
+    const key = raw.trim() as keyof typeof LEVEL_KEY_TO_SURGE;
+    const mapped = LEVEL_KEY_TO_SURGE[key];
+    if (mapped && !seen.has(mapped)) {
+      seen.add(mapped);
+      out.push(mapped);
+    }
+  }
+  return out;
+}
+
+function sanitizeCat(v: string | undefined): string | null {
+  if (!v) return null;
+  const s = v.slice(0, 50).trim();
+  return s || null;
+}
+
+const LEVEL_HINT: Record<SurgeLevel, string> = {
+  SURGE: '급증',
+  WATCH: '주의',
+  STABLE: '안정',
+  IMPROVED: '개선',
+};
+
+export default async function ProductInsightsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const seg: SegKey = params.seg === 'user' || params.seg === 'company' ? params.seg : 'all';
+  const levels = parseLevels(params.level);
+  const asOf = parseAsOfDate(params.asOf) ?? kstYesterday();
+  const category2 = sanitizeCat(params.cat2);
+  const category3 = sanitizeCat(params.cat3);
+  const category1 = segToCategory1(seg);
+  const today = kstToday();
+
+  const filters: ProductFilters = { seg, levels, category2, category3, asOf };
+
+  const [allSurges, segSummary, newKeywords, negDelta, mtd, lastDataDate] = await Promise.all([
+    fetchAllSurges(category1, asOf, category2, category3),
+    fetchSegSummary(asOf),
+    fetchNewKeywords(category1, asOf, category3),
+    fetchNegDelta(category1, asOf, category2),
+    fetchMtdSummary(asOf, category1, category2, category3),
+    fetchLastDataDate(),
+  ]);
+  const statusSummary = deriveStatusSummary(allSurges);
+  const gridSurges = deriveGridSurges(allSurges, levels);
+
+  return (
+    <div className="page">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <p className="eyebrow" style={{ margin: 0 }}>Product Insights — 프로덕트 이슈 발굴</p>
+        {lastDataDate && (
+          <span
+            title="데이터 파이프라인에 반영된 마지막 날짜. 새 티켓은 다음 배치에 반영됩니다."
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '3px 8px', borderRadius: 4,
+              background: 'var(--panel-2)',
+              border: '1px solid var(--border)',
+              fontFamily: 'var(--mono)', fontSize: 10.5,
+              color: 'var(--text-dim)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            <span style={{
+              display: 'inline-block', width: 6, height: 6, borderRadius: 3,
+              background: 'var(--good)',
+            }} />
+            데이터 최신 반영 · {lastDataDate}
+          </span>
+        )}
+        <span
+          title={
+            '색상 범례:\n' +
+            '● 빨강 = 급증 (평시 대비 크게 늘어남)\n' +
+            '● 노랑 = 주의 (평시 대비 다소 늘어남)\n' +
+            '● 회색 = 안정 (평시 수준)\n' +
+            '● 초록 = 개선 (평시 대비 줄어듦)'
+          }
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 20, height: 20, borderRadius: 10,
+            background: 'var(--panel-2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-mute)',
+            fontFamily: 'var(--mono)', fontSize: 11,
+            cursor: 'help',
+            userSelect: 'none',
+          }}
+          aria-label="색상 범례"
+        >?</span>
+      </div>
+
+      <div className="filter-sticky">
+        <span
+          className="label"
+          title="pill·chip을 조합해 범위를 좁혀보세요. 각 항목 클릭으로 적용·해제 가능합니다."
+          style={{ cursor: 'help' }}
+        >필터</span>
+        <SegFilter filters={filters} summary={segSummary} />
+        <LevelPill filters={filters} summary={statusSummary} />
+        {category2 && <CategoryChip kind="category2" value={category2} filters={filters} />}
+        {category3 && <CategoryChip kind="category3" value={category3} filters={filters} />}
+        <DateFilter filters={filters} today={today} />
+      </div>
+
+      {mtd && (
+        <div
+          title="이번 달 1일부터 기준일까지 누적된 티켓 수 · 전월 동기간과 비교"
+          style={{
+            fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)',
+            cursor: 'help',
+          }}
+        >
+          <b style={{ color: 'var(--text)' }}>{mtdLabel(asOf)} {Number(mtd.mtd || 0).toLocaleString()}건</b>
+          {mtd.prev_same_period ? (
+            <>
+              {' · 전월 동기간 대비 '}
+              <span style={{
+                color:
+                  mtd.mom_pct == null ? 'var(--text-mute)' :
+                  mtd.mom_pct > 0 ? 'var(--surge)' : 'var(--good)',
+              }}>
+                {mtd.mom_pct == null ? '—' : `${mtd.mom_pct > 0 ? '+' : ''}${mtd.mom_pct}%`}
+              </span>
+            </>
+          ) : null}
+          {mtd.mtd
+            ? ` · 부정 ${((Number(mtd.mtd_negative || 0) / Number(mtd.mtd)) * 100).toFixed(1)}%`
+            : null}
+        </div>
+      )}
+
+      <section>
+        <div className="section-hdr">
+          <h2 title="최근 7일 티켓 수를 직전 4주 평시와 비교해 카테고리별 상태(급증/주의/안정/개선)를 분류"
+              style={{ cursor: 'help' }}>주간 시그널 · 7일 창</h2>
+          <span className="hint">
+            {windowLabel(asOf, 7)} · 블럭 클릭 → 상단 필터에 반영 (다중 선택 가능)
+          </span>
+        </div>
+        <StatusOverview rows={statusSummary} activeLevels={levels} seg={seg} asOf={asOf} />
+      </section>
+
+      <section>
+        <div className="section-hdr" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <h2 title="급증한 순서로 카테고리 정렬. 카드 클릭 시 상세 드릴다운 오픈 + 상단 필터에 중/소분류 추가"
+              style={{ marginRight: 8, cursor: 'help' }}>카테고리 목록 · 7일 창</h2>
+          <span className="hint" style={{ marginLeft: 'auto' }}>
+            {gridSurges.length}건 · 카드 클릭 → 상단 필터에 중/소분류 추가
+            {levels.length > 0 && ` · ${levels.map(l => LEVEL_HINT[l]).join(' + ')} 만`}
+          </span>
+        </div>
+        <WatchGrid surges={gridSurges} filters={filters} />
+      </section>
+
+      <section>
+        <div className="section-hdr">
+          <h2 title="최근 7일 부정 문의 비율이 직전 4주 평시 대비 얼마나 늘고 줄었는지 (%p 단위)"
+              style={{ cursor: 'help' }}>부정 감정 변화 · 최근 7일 vs 직전 4주 평시</h2>
+          <span className="hint">
+            최근 7일 부정률 vs 직전 4주 평시 (%p) · 중분류 단위 · 변화폭 큰 순 · 최근 7일 5건 이상 · 4주 20건 이상
+          </span>
+        </div>
+        <div className="card">
+          <NegDelta rows={negDelta} />
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="section-hdr">
+          <h2 title="직전 2주엔 거의 없던 새로운 키워드가 최근 2주에 자주 등장한 것들"
+              style={{ cursor: 'help' }}>신규 등장 키워드 · 2주 창</h2>
+          <span className="hint">직전 2주 언급 2회 미만 · 최근 2주 언급 3회 이상</span>
+        </div>
+        {newKeywords.length === 0 ? (
+          <p style={{ color: 'var(--text-mute)', fontSize: 12 }}>신규 키워드 없음.</p>
+        ) : (
+          <div className="kw-grid">
+            {newKeywords.map(k => (
+              <div key={k.keyword}
+                   className={`kw-item ${k.recent_negative > 0 ? '--neg' : ''}`}>
+                <div className="kw">{k.keyword}</div>
+                <div className="m">
+                  {k.recent_mentions}회 언급 · {k.top_category3}
+                  {k.recent_negative > 0 && <span> · <span style={{color:'var(--surge)'}}>부정 {k.recent_negative}</span></span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="foot">
+        <span>via BigQuery · <code>voc_surge_score</code> · <code>voc_daily</code> · <code>voc_keyword_trend</code></span>
+        <span>revalidate 600s</span>
+      </div>
+    </div>
+  );
+}
