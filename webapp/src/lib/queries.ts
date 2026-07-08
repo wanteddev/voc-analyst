@@ -375,7 +375,7 @@ export async function fetchCategoryKeywords(f: {
     WITH ref AS (SELECT ${AS_OF_DATE} AS d)
     SELECT keyword, SUM(mentions) AS mentions, SUM(negative_mentions) AS negative_mentions
     FROM \`wanted-data.wanted_ml_voc.voc_keyword_trend\`, ref
-    WHERE week_start >= DATE_SUB(ref.d, INTERVAL 4 WEEK)
+    WHERE week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
       AND week_start <= ref.d
       AND top_category3 = @category3
     GROUP BY keyword
@@ -408,7 +408,7 @@ export async function fetchCategoryTickets(f: {
   const dateRange = f.weekStart
     ? `AND DATE(event_create_time, 'Asia/Seoul') >= @weekStart
        AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(@weekStart, INTERVAL 6 DAY)`
-    : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(ref.d, INTERVAL 28 DAY)
+    : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(ref.d, INTERVAL 84 DAY)
        AND DATE(event_create_time, 'Asia/Seoul') <= ref.d`;
   return query<CategoryTicket>(
     `

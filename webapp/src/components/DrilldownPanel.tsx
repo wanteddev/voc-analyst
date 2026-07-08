@@ -117,11 +117,11 @@ export function DrilldownPanel({
     ? '주간 부정률 (%) · 12주 창'
     : '주간 티켓 추이 · 12주 창';
   const keywordEyebrow = isNeg
-    ? `부정 키워드 · 4주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`
-    : `상위 키워드 · 4주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`;
+    ? `부정 키워드 · 12주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`
+    : `상위 키워드 · 12주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`;
   const ticketsEyebrow = isNeg
-    ? '부정 티켓 · 28일 창'
-    : '원문 티켓 · 28일 창 (부정 우선)';
+    ? '부정 티켓 · 12주 창'
+    : '원문 티켓 · 12주 창 (부정 우선)';
 
   return (
     <div className={cardClass} style={{ marginTop: 12 }}>
@@ -234,8 +234,8 @@ export function DrilldownPanel({
                       ? Math.round((k.negative_mentions / k.mentions) * 100)
                       : 0;
                     const tip = k.negative_mentions > 0
-                      ? `'${k.keyword}' — 최근 4주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서 ${k.negative_mentions}회 (${negPct}%)`
-                      : `'${k.keyword}' — 최근 4주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서는 없음`;
+                      ? `'${k.keyword}' — 최근 12주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서 ${k.negative_mentions}회 (${negPct}%)`
+                      : `'${k.keyword}' — 최근 12주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서는 없음`;
                     return (
                       <span
                         key={k.keyword}
@@ -283,7 +283,7 @@ export function DrilldownPanel({
                     fontFamily: 'var(--mono)', fontSize: 10,
                     cursor: 'pointer',
                   }}
-                  title="28일 전체로 되돌리기"
+                  title="12주 전체로 되돌리기"
                 >
                   × 필터 해제
                 </button>
