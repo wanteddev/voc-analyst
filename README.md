@@ -24,7 +24,7 @@ Zendesk 문의
        └─ Redis 캐시 (25h TTL) — 같은 조회는 하루 1번만 BQ 실행
 ```
 
-**두 서비스 모두 Backyard(사내 Kubernetes 샌드박스)에 배포**되어 있습니다. AWS가 아닙니다 — 리포에 남아있는 Lambda 관련 파일은 과거 흔적입니다.
+**두 서비스 모두 Backyard(사내 Kubernetes 샌드박스)에 배포**되어 있습니다. AWS가 아닙니다 — 과거 Lambda/CloudFormation 배포 파일은 제거됐고, 코드의 `LAMBDA_*` 환경변수 fallback만 호환용으로 남아 있습니다.
 
 **핵심 개념**
 - **surge_level**: 카테고리별 상태. `SURGE`(급증) / `WATCH`(주의) / `STABLE`(안정) / `IMPROVED`(개선). 최근 7일 티켓 수를 직전 4주 평시와 비교해 분류.

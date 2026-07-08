@@ -1,6 +1,4 @@
-# Backyard 배포용 arm64 Dockerfile
-# 기존 Lambda용 Dockerfile은 폐기 예정. Week 2 이관 완료 후 삭제.
-# 참고: wanted-insights-bot 메모리 backyard_arm64.md — amd64 push 시 exec format error.
+# Backyard 배포용 arm64 Dockerfile (amd64 push 시 exec format error)
 
 FROM --platform=linux/arm64 python:3.13-slim AS base
 
