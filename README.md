@@ -21,6 +21,7 @@ Zendesk 문의
   → BigQuery views (bq_views/ 폴더의 SQL로 정의)
   → ① Slack 주간 봇 (src/voc_analyst/, Python)
   → ② 웹 대시보드 (webapp/, Next.js)
+       └─ Redis 캐시 (25h TTL) — 같은 조회는 하루 1번만 BQ 실행
 ```
 
 **두 서비스 모두 Backyard(사내 Kubernetes 샌드박스)에 배포**되어 있습니다. AWS가 아닙니다 — 리포에 남아있는 Lambda 관련 파일은 과거 흔적입니다.
