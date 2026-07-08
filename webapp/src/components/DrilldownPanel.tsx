@@ -15,7 +15,13 @@ type Ticket = {
   detail_preview: string;
 };
 
-type Data = { trend: TrendPoint[]; keywords: Keyword[]; tickets: Ticket[] };
+type KeywordTrendPoint = { week: { value: string }; mentions: number; negative_mentions: number };
+type Data = {
+  trend: TrendPoint[];
+  keywords: Keyword[];
+  tickets: Ticket[];
+  keywordTrend?: KeywordTrendPoint[] | null;
+};
 type Focus = 'volume' | 'negative';
 
 export function DrilldownPanel({
@@ -35,7 +41,9 @@ export function DrilldownPanel({
   const [err, setErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // 크로스 필터: 주간 포인트 선택 + 키워드 선택. 조합 가능.
   const [weekStart, setWeekStart] = useState<string | null>(null);
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
   async function copyToClipboard(id: string, text: string) {
     try {
@@ -59,6 +67,7 @@ export function DrilldownPanel({
     if (category3) qs.set('category3', category3);
     if (focus === 'negative') qs.set('focus', 'negative');
     if (weekStart) qs.set('weekStart', weekStart);
+    if (selectedKeyword) qs.set('keyword', selectedKeyword);
 
     fetch(`/api/drilldown?${qs.toString()}`)
       .then(async r => {
@@ -81,16 +90,26 @@ export function DrilldownPanel({
       .then(d => { if (!cancelled) setData(d); })
       .catch(e => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
-  }, [category1, category2, category3, focus, weekStart]);
+  }, [category1, category2, category3, focus, weekStart, selectedKeyword]);
+
+  // 카테고리 변경 시 크로스 필터 초기화
+  useEffect(() => {
+    setWeekStart(null);
+    setSelectedKeyword(null);
+  }, [category1, category2, category3]);
 
   const label = category3 ? `${category2} / ${category3}` : `${category2} (전체 하위 category3)`;
   const isNeg = focus === 'negative';
   const headerText = isNeg ? `부정 감정 드릴다운: ${label}` : `드릴다운: ${label}`;
   const cardClass = isNeg ? 'card --surge' : 'card';
 
-  // 부정 focus 시 트렌드는 부정률(%), volume focus 시 티켓 수
+  // 키워드 선택 시: 해당 키워드 언급 추이. 아니면 카테고리 티켓/부정률 추이.
+  const isKeywordChart = !!(selectedKeyword && data?.keywordTrend && data.keywordTrend.length > 0);
   const trendPoints = useMemo(() => {
     if (!data) return [];
+    if (isKeywordChart && data.keywordTrend) {
+      return data.keywordTrend.map(p => ({ x: p.week.value.slice(5), y: Number(p.mentions) }));
+    }
     if (isNeg) {
       return data.trend.map(p => ({
         x: p.week.value.slice(5),
@@ -100,7 +119,14 @@ export function DrilldownPanel({
       }));
     }
     return data.trend.map(p => ({ x: p.week.value.slice(5), y: Number(p.tickets) }));
-  }, [data, isNeg]);
+  }, [data, isNeg, isKeywordChart]);
+
+  // 차트 포인트 클릭용 주차 목록 — 키워드 차트일 땐 keywordTrend 기준
+  const chartWeeks = useMemo(() => {
+    if (!data) return [];
+    if (isKeywordChart && data.keywordTrend) return data.keywordTrend.map(p => p.week.value);
+    return data.trend.map(p => p.week.value);
+  }, [data, isKeywordChart]);
 
   // 키워드: volume이면 mentions desc (그대로), negative면 neg desc + neg>0만
   const displayKeywords = useMemo(() => {
@@ -203,26 +229,40 @@ export function DrilldownPanel({
             gap: 14,
           }}>
             <div>
-              <div className="eyebrow">{trendEyebrow} · <span style={{ color: 'var(--text-dim)' }}>포인트 클릭 → 그 주 티켓 필터</span></div>
+              <div className="eyebrow">
+                {isKeywordChart
+                  ? <>{'\''}{selectedKeyword}{'\''} 주간 언급 추이 · 12주 창</>
+                  : trendEyebrow}
+                {' · '}
+                <span style={{ color: 'var(--text-dim)' }}>포인트 클릭 → 그 주로 필터</span>
+              </div>
               <TrendChart
                 points={trendPoints}
-                color={isNeg ? 'var(--surge)' : 'var(--accent)'}
-                yFormat={isNeg ? v => `${v}%` : undefined}
-                ariaLabel={`${label} ${isNeg ? '주간 부정률' : '주간 티켓'} 트렌드`}
+                color={isKeywordChart ? 'var(--watch)' : isNeg ? 'var(--surge)' : 'var(--accent)'}
+                yFormat={!isKeywordChart && isNeg ? v => `${v}%` : undefined}
+                ariaLabel={
+                  isKeywordChart
+                    ? `'${selectedKeyword}' 주간 언급 트렌드`
+                    : `${label} ${isNeg ? '주간 부정률' : '주간 티켓'} 트렌드`
+                }
                 activeIndex={
-                  weekStart
-                    ? data.trend.findIndex(t => t.week.value === weekStart)
-                    : null
+                  weekStart ? chartWeeks.findIndex(w => w === weekStart) : null
                 }
                 onPointClick={(i) => {
-                  const w = data.trend[i]?.week.value;
+                  const w = chartWeeks[i];
                   if (!w) return;
                   setWeekStart(prev => (prev === w ? null : w));
                 }}
               />
             </div>
             <div>
-              <div className="eyebrow">{keywordEyebrow}</div>
+              <div className="eyebrow">
+                {weekStart
+                  ? `상위 키워드 · ${weekStart.slice(5)} 주간`
+                  : keywordEyebrow}
+                {' · '}
+                <span style={{ color: 'var(--text-dim)' }}>키워드 클릭 → 차트·티켓 필터</span>
+              </div>
               {displayKeywords.length === 0 ? (
                 <p style={{ color: 'var(--text-mute)', fontSize: 12 }}>
                   {category3 ? (isNeg ? '부정 키워드 없음' : '키워드 없음') : 'category3 카드 클릭 시 키워드 표시'}
@@ -233,22 +273,30 @@ export function DrilldownPanel({
                     const negPct = k.mentions > 0
                       ? Math.round((k.negative_mentions / k.mentions) * 100)
                       : 0;
-                    const tip = k.negative_mentions > 0
-                      ? `'${k.keyword}' — 최근 12주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서 ${k.negative_mentions}회 (${negPct}%)`
-                      : `'${k.keyword}' — 최근 12주 총 ${k.mentions}회 언급 · 부정 감정 티켓에서는 없음`;
+                    const isSel = selectedKeyword === k.keyword;
+                    const tip = isSel
+                      ? `'${k.keyword}' 필터 해제`
+                      : k.negative_mentions > 0
+                      ? `'${k.keyword}' — 총 ${k.mentions}회 언급 · 부정 티켓에서 ${k.negative_mentions}회 (${negPct}%) · 클릭하여 필터`
+                      : `'${k.keyword}' — 총 ${k.mentions}회 언급 · 클릭하여 필터`;
                     return (
-                      <span
+                      <button
                         key={k.keyword}
                         title={tip}
+                        onClick={() =>
+                          setSelectedKeyword(prev => (prev === k.keyword ? null : k.keyword))
+                        }
                         style={{
                           padding: '4px 10px', borderRadius: 999,
-                          background: 'var(--panel-2)',
+                          background: isSel ? 'var(--panel)' : 'var(--panel-2)',
                           border: '1px solid var(--border)',
                           borderLeftColor: k.negative_mentions > 0 ? 'var(--surge)' : 'var(--border)',
                           borderLeftWidth: k.negative_mentions > 0 ? 3 : 1,
+                          outline: isSel ? '2px solid var(--accent)' : 'none',
+                          outlineOffset: -1,
                           fontSize: 11.5, fontFamily: 'var(--mono)',
                           display: 'inline-flex', alignItems: 'center', gap: 6,
-                          cursor: 'help',
+                          cursor: 'pointer',
                         }}
                       >
                         <span style={{ color: 'var(--text)' }}>{k.keyword}</span>
@@ -256,7 +304,8 @@ export function DrilldownPanel({
                         {k.negative_mentions > 0 && (
                           <span style={{ color: 'var(--surge)' }}>부정 {k.negative_mentions}</span>
                         )}
-                      </span>
+                        {isSel && <span style={{ color: 'var(--accent)' }}>✓</span>}
+                      </button>
                     );
                   })}
                 </div>
@@ -268,8 +317,12 @@ export function DrilldownPanel({
           <div>
             <div className="eyebrow" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span>
-                {weekStart
-                  ? `${isNeg ? '부정 티켓' : '원문 티켓'} · ${weekStart.slice(5)} 주간 (7일)`
+                {weekStart || selectedKeyword
+                  ? [
+                      isNeg ? '부정 티켓' : '원문 티켓',
+                      weekStart ? `${weekStart.slice(5)} 주간` : null,
+                      selectedKeyword ? `'${selectedKeyword}' 포함` : null,
+                    ].filter(Boolean).join(' · ')
                   : ticketsEyebrow}
               </span>
               {weekStart && (
@@ -283,9 +336,25 @@ export function DrilldownPanel({
                     fontFamily: 'var(--mono)', fontSize: 10,
                     cursor: 'pointer',
                   }}
-                  title="12주 전체로 되돌리기"
+                  title="주간 필터 해제 (12주 전체)"
                 >
-                  × 필터 해제
+                  × {weekStart.slice(5)} 주간
+                </button>
+              )}
+              {selectedKeyword && (
+                <button
+                  onClick={() => setSelectedKeyword(null)}
+                  style={{
+                    padding: '2px 8px', borderRadius: 4,
+                    background: 'var(--panel-2)',
+                    border: '1px solid var(--border-strong)',
+                    color: 'var(--text-dim)',
+                    fontFamily: 'var(--mono)', fontSize: 10,
+                    cursor: 'pointer',
+                  }}
+                  title="키워드 필터 해제"
+                >
+                  × {selectedKeyword}
                 </button>
               )}
             </div>

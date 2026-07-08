@@ -2,9 +2,7 @@ import {
   fetchAllSurges,
   deriveStatusSummary,
   deriveGridSurges,
-  fetchSegSummary,
   fetchNewKeywords,
-  fetchNegDelta,
   fetchMtdSummary,
   fetchLastDataDate,
   parseAsOfDate,
@@ -15,13 +13,14 @@ import {
   LEVEL_KEY_TO_SURGE,
   type SegKey,
   type SurgeLevel,
+  type EmotionKey,
 } from '@/lib/queries';
 import type { ProductFilters } from '@/lib/product-url';
 import { WatchGrid } from '@/components/WatchGrid';
-import { NegDelta } from '@/components/NegDelta';
-import { SegFilter } from '@/components/SegFilter';
 import { LevelPill } from '@/components/LevelPill';
+import { EmotionFilter } from '@/components/EmotionFilter';
 import { CategoryChip } from '@/components/CategoryChip';
+import { FilterAdd, type FilterOptions } from '@/components/FilterAdd';
 import { StatusOverview } from '@/components/StatusOverview';
 import { DateFilter } from '@/components/DateFilter';
 
@@ -33,11 +32,17 @@ type PageProps = {
   searchParams: Promise<{
     seg?: string;
     level?: string;
+    emo?: string;
     asOf?: string;
     cat2?: string;
     cat3?: string;
   }>;
 };
+
+function parseEmotion(v: string | undefined): EmotionKey {
+  if (v === 'negative' || v === 'positive' || v === 'neutral') return v;
+  return 'all';
+}
 
 function kstToday(): string {
   const now = new Date();
@@ -77,24 +82,41 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const seg: SegKey = params.seg === 'user' || params.seg === 'company' ? params.seg : 'all';
   const levels = parseLevels(params.level);
+  const emotion = parseEmotion(params.emo);
   const asOf = parseAsOfDate(params.asOf) ?? kstYesterday();
   const category2 = sanitizeCat(params.cat2);
   const category3 = sanitizeCat(params.cat3);
   const category1 = segToCategory1(seg);
   const today = kstToday();
 
-  const filters: ProductFilters = { seg, levels, category2, category3, asOf };
+  const filters: ProductFilters = { seg, levels, emotion, category2, category3, asOf };
 
-  const [allSurges, segSummary, newKeywords, negDelta, mtd, lastDataDate] = await Promise.all([
-    fetchAllSurges(category1, asOf, category2, category3),
-    fetchSegSummary(asOf),
+  const [allSurges, newKeywords, mtd, lastDataDate] = await Promise.all([
+    fetchAllSurges(category1, asOf, category2, category3, emotion),
     fetchNewKeywords(category1, asOf, category3),
-    fetchNegDelta(category1, asOf, category2),
-    fetchMtdSummary(asOf, category1, category2, category3),
+    fetchMtdSummary(asOf, category1, category2, category3, emotion),
     fetchLastDataDate(),
   ]);
   const statusSummary = deriveStatusSummary(allSurges);
   const gridSurges = deriveGridSurges(allSurges, levels);
+
+  // FilterAdd 팝오버 값 목록 — 현재 스냅샷에서 distinct 추출 (BQ 추가 쿼리 없음)
+  const filterOptions: FilterOptions = (() => {
+    const agg = (key: 'category1' | 'category2' | 'category3') => {
+      const map = new Map<string, number>();
+      for (const s of allSurges) {
+        const v = s[key];
+        if (!v || v === '(미분류)') continue;
+        map.set(v, (map.get(v) ?? 0) + Number(s.recent_7d || 0));
+      }
+      return Array.from(map.entries())
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count);
+    };
+    return { category1: agg('category1'), category2: agg('category2'), category3: agg('category3') };
+  })();
+
+  const segLabel = seg === 'user' ? '유저' : seg === 'company' ? '기업' : null;
 
   return (
     <div className="page">
@@ -145,11 +167,13 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
       <div className="filter-sticky">
         <span
           className="label"
-          title="pill·chip을 조합해 범위를 좁혀보세요. 각 항목 클릭으로 적용·해제 가능합니다."
+          title="pill·chip을 조합해 범위를 좁혀보세요. + 로 분류 필터를 추가하고, chip의 ×로 해제합니다."
           style={{ cursor: 'help' }}
         >필터</span>
-        <SegFilter filters={filters} summary={segSummary} />
+        <FilterAdd filters={filters} options={filterOptions} />
         <LevelPill filters={filters} summary={statusSummary} />
+        <EmotionFilter filters={filters} />
+        {segLabel && <CategoryChip kind="category1" value={segLabel} filters={filters} />}
         {category2 && <CategoryChip kind="category2" value={category2} filters={filters} />}
         {category3 && <CategoryChip kind="category3" value={category3} filters={filters} />}
         <DateFilter filters={filters} today={today} />
@@ -190,7 +214,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
             {windowLabel(asOf, 7)} · 블럭 클릭 → 상단 필터에 반영 (다중 선택 가능)
           </span>
         </div>
-        <StatusOverview rows={statusSummary} activeLevels={levels} seg={seg} asOf={asOf} />
+        <StatusOverview rows={statusSummary} filters={filters} />
       </section>
 
       <section>
@@ -203,19 +227,6 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
           </span>
         </div>
         <WatchGrid surges={gridSurges} filters={filters} />
-      </section>
-
-      <section>
-        <div className="section-hdr">
-          <h2 title="최근 7일 부정 문의 비율이 직전 4주 평시 대비 얼마나 늘고 줄었는지 (%p 단위)"
-              style={{ cursor: 'help' }}>부정 감정 변화 · 최근 7일 vs 직전 4주 평시</h2>
-          <span className="hint">
-            최근 7일 부정률 vs 직전 4주 평시 (%p) · 중분류 단위 · 변화폭 큰 순 · 최근 7일 5건 이상 · 4주 20건 이상
-          </span>
-        </div>
-        <div className="card">
-          <NegDelta rows={negDelta} />
-        </div>
       </section>
 
       <section className="card">

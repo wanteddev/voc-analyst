@@ -19,3 +19,17 @@ export const SURGE_TO_LEVEL_KEY: Record<SurgeLevel, Exclude<LevelKey, 'all'>> = 
   STABLE: 'stable',
   IMPROVED: 'improved',
 };
+
+// 감정 필터 — URL param 'emo' ↔ BQ emotion 컬럼 값
+export type EmotionKey = 'all' | 'negative' | 'positive' | 'neutral';
+export const EMOTION_TO_KO: Record<Exclude<EmotionKey, 'all'>, string> = {
+  negative: '부정',
+  positive: '긍정',
+  neutral: '중립',
+};
+export const EMOTION_LABEL: Record<EmotionKey, string> = {
+  all: '전체',
+  negative: '부정',
+  positive: '긍정',
+  neutral: '중립',
+};

@@ -3,6 +3,7 @@ import {
   fetchCategoryTrend,
   fetchCategoryKeywords,
   fetchCategoryTickets,
+  fetchKeywordTrend,
 } from '@/lib/queries';
 
 export const runtime = 'nodejs';
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
   const category3 = searchParams.get('category3');
   const focus = searchParams.get('focus');
   const weekStartRaw = searchParams.get('weekStart');
+  const keywordRaw = searchParams.get('keyword');
 
   if (!category2 || category2.length > 50) {
     return NextResponse.json({ error: 'category2 required (≤50자)' }, { status: 400 });
@@ -28,15 +30,22 @@ export async function GET(req: NextRequest) {
   const category1 = category1Raw && ALLOWED_CATEGORY1.has(category1Raw) ? category1Raw : null;
   const onlyNegative = focus === 'negative';
   const weekStart = weekStartRaw && DATE_RE.test(weekStartRaw) ? weekStartRaw : null;
+  const keyword = keywordRaw ? keywordRaw.slice(0, 60).trim() || null : null;
 
   try {
-    const [trend, keywords, tickets] = await Promise.all([
+    const [trend, keywords, tickets, keywordTrend] = await Promise.all([
       fetchCategoryTrend({ category1, category2, category3 }),
-      category3 ? fetchCategoryKeywords({ category3 }) : Promise.resolve([]),
-      fetchCategoryTickets({ category1, category2, category3, onlyNegative, weekStart }),
+      category3
+        ? fetchCategoryKeywords({ category3, weekStart })
+        : Promise.resolve([]),
+      fetchCategoryTickets({ category1, category2, category3, onlyNegative, weekStart, keyword }),
+      // 키워드 선택 시 차트를 키워드 언급 추이로 전환
+      keyword && category3
+        ? fetchKeywordTrend({ category3, keyword })
+        : Promise.resolve(null),
     ]);
     return NextResponse.json(
-      { trend, keywords, tickets },
+      { trend, keywords, tickets, keywordTrend },
       { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=60' } }
     );
   } catch (e: unknown) {

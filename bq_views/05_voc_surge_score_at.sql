@@ -1,13 +1,15 @@
--- voc_surge_score_at(as_of DATE) — 임의 시점 스냅샷 (as-of INCLUSIVE, Option Y)
+-- voc_surge_score_at(as_of DATE, emo STRING) — 임의 시점 스냅샷 (as-of INCLUSIVE, Option Y)
 -- recent_7d = [as_of - 6, as_of] = 7일 (asOf 포함)
 -- baseline_28d = [as_of - 34, as_of - 7] = 28일
+-- emo: '부정'|'긍정'|'중립' 지정 시 해당 감정 티켓만 집계, NULL이면 전체.
 --
 -- 사용:
---   SELECT * FROM `wanted-data.wanted_ml_voc.voc_surge_score_at`(DATE('2026-06-01'))
+--   SELECT * FROM `wanted-data.wanted_ml_voc.voc_surge_score_at`(DATE('2026-06-01'), NULL)
+--   SELECT * FROM `wanted-data.wanted_ml_voc.voc_surge_score_at`(DATE('2026-06-01'), '부정')
 --
--- as_of = CURRENT_DATE('Asia/Seoul') 이면 voc_surge_score view와 동일 결과.
+-- as_of = CURRENT_DATE('Asia/Seoul'), emo = NULL 이면 voc_surge_score view와 동일 결과.
 
-CREATE OR REPLACE TABLE FUNCTION `wanted-data.wanted_ml_voc.voc_surge_score_at`(as_of DATE)
+CREATE OR REPLACE TABLE FUNCTION `wanted-data.wanted_ml_voc.voc_surge_score_at`(as_of DATE, emo STRING)
 AS (
   WITH daily_cat AS (
     SELECT
@@ -17,6 +19,7 @@ AS (
     FROM `wanted-data.wanted_ml_voc.voc_daily`
     WHERE date >= DATE_SUB(as_of, INTERVAL 34 DAY)
       AND date <= as_of
+      AND (emo IS NULL OR emotion = emo)
     GROUP BY date, category1, category2, category3
   ),
   categories AS (

@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import type { StatusSummaryRow, SurgeLevel } from '@/lib/queries';
-import { buildProductHref } from '@/lib/product-url';
+import type { StatusSummaryRow } from '@/lib/queries';
+import { buildProductHref, type ProductFilters } from '@/lib/product-url';
 
 const ORDER: Array<StatusSummaryRow['surge_level']> = ['SURGE', 'WATCH', 'STABLE', 'IMPROVED'];
 
@@ -16,15 +16,12 @@ const META: Record<
 
 export function StatusOverview({
   rows,
-  activeLevels,
-  seg,
-  asOf,
+  filters,
 }: {
   rows: StatusSummaryRow[];
-  activeLevels: SurgeLevel[];
-  seg: 'all' | 'user' | 'company';
-  asOf?: string | null;
+  filters: ProductFilters;
 }) {
+  const activeLevels = filters.levels;
   const map = new Map(rows.map(r => [r.surge_level, r]));
   const grandTickets = rows.reduce((s, r) => s + Number(r.tickets || 0), 0);
   const activeSet = new Set(activeLevels);
@@ -44,10 +41,7 @@ export function StatusOverview({
           const nextLevels = active
             ? activeLevels.filter(l => l !== level)
             : [...activeLevels, level];
-          const href = buildProductHref(
-            { levels: nextLevels },
-            { seg, levels: activeLevels, category2: null, category3: null, asOf: asOf ?? null }
-          );
+          const href = buildProductHref({ levels: nextLevels }, filters);
           return (
             <Link
               key={level}

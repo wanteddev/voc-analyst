@@ -68,9 +68,16 @@ const AS_OF_DATE = `COALESCE(SAFE_CAST(@asOf AS DATE), DATE_SUB(CURRENT_DATE('As
 // Level filter for surge grid — 5-way
 // ────────────────────────────────────────────────────────────────────
 
-export type { LevelKey, SurgeLevel } from './level';
-export { LEVEL_KEY_TO_SURGE, SURGE_TO_LEVEL_KEY } from './level';
-import type { SurgeLevel } from './level';
+export type { LevelKey, SurgeLevel, EmotionKey } from './level';
+export { LEVEL_KEY_TO_SURGE, SURGE_TO_LEVEL_KEY, EMOTION_TO_KO } from './level';
+import type { SurgeLevel, EmotionKey } from './level';
+import { EMOTION_TO_KO } from './level';
+
+// EmotionKey → BQ emotion 값 ('부정' 등). 'all'이면 null (필터 없음).
+function emoParam(emotion?: EmotionKey | null): string | null {
+  if (!emotion || emotion === 'all') return null;
+  return EMOTION_TO_KO[emotion];
+}
 
 export type SurgeItem = {
   surge_level: 'SURGE' | 'WATCH' | 'IMPROVED' | 'STABLE';
@@ -88,10 +95,11 @@ export type SurgeItem = {
 };
 
 // SURGE 스코어 소스 — asOf가 null(오늘)이면 view, 그 외면 TVF.
-function surgeSource(asOf: string | null): string {
-  return asOf
-    ? `\`wanted-data.wanted_ml_voc.voc_surge_score_at\`(DATE('${asOf}'))`
-    : `\`wanted-data.wanted_ml_voc.voc_surge_score\``;
+// emo(한글 감정값)는 TVF 경로에서만 지원 — 페이지가 항상 asOf(어제 default)를 넘기므로 실질 전체 커버.
+function surgeSource(asOf: string | null, emo: string | null = null): string {
+  if (!asOf) return `\`wanted-data.wanted_ml_voc.voc_surge_score\``;
+  const emoArg = emo ? `'${emo.replace(/'/g, '')}'` : 'NULL';
+  return `\`wanted-data.wanted_ml_voc.voc_surge_score_at\`(DATE('${asOf}'), ${emoArg})`;
 }
 
 // 원자적 스냅샷 — 필터·정렬 없이 모든 카테고리 반환. StatusOverview와 WatchGrid를
@@ -101,13 +109,14 @@ export async function fetchAllSurges(
   asOf?: string | null,
   category2?: string | null,
   category3?: string | null,
+  emotion?: EmotionKey | null,
 ): Promise<SurgeItem[]> {
   return query<SurgeItem>(
     `
     SELECT surge_level, category1, category2, category3,
            recent_7d, recent_7d_negative, baseline_28d,
            recent_daily_avg, baseline_daily_avg, z_score, ratio, recent_negative_ratio
-    FROM ${surgeSource(asOf ?? null)}
+    FROM ${surgeSource(asOf ?? null, emoParam(emotion))}
     WHERE (@category1 IS NULL OR category1 = @category1)
       AND (@category2 IS NULL OR category2 = @category2)
       AND (@category3 IS NULL OR category3 = @category3)
@@ -221,11 +230,14 @@ export async function fetchSurges(
 
 export type SegSummary = { all: number; user: number; company: number };
 
-export async function fetchSegSummary(asOf?: string | null): Promise<SegSummary> {
+export async function fetchSegSummary(
+  asOf?: string | null,
+  emotion?: EmotionKey | null,
+): Promise<SegSummary> {
   const rows = await query<{ category1: string; tickets: number }>(
     `
     SELECT category1, SUM(recent_7d) AS tickets
-    FROM ${surgeSource(asOf ?? null)}
+    FROM ${surgeSource(asOf ?? null, emoParam(emotion))}
     GROUP BY category1
     `
   );
@@ -369,20 +381,53 @@ export type CategoryKeyword = {
 export async function fetchCategoryKeywords(f: {
   category3: string;
   asOf?: string | null;
+  weekStart?: string | null; // 지정 시 해당 주(월요일 시작)만
 }): Promise<CategoryKeyword[]> {
+  const weekFilter = f.weekStart
+    ? `AND week_start = SAFE_CAST(@weekStart AS DATE)`
+    : `AND week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
+       AND week_start <= ref.d`;
   return query<CategoryKeyword>(
     `
     WITH ref AS (SELECT ${AS_OF_DATE} AS d)
     SELECT keyword, SUM(mentions) AS mentions, SUM(negative_mentions) AS negative_mentions
     FROM \`wanted-data.wanted_ml_voc.voc_keyword_trend\`, ref
-    WHERE week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
-      AND week_start <= ref.d
-      AND top_category3 = @category3
+    WHERE top_category3 = @category3
+      ${weekFilter}
     GROUP BY keyword
     ORDER BY mentions DESC
     LIMIT 15
     `,
-    { category3: f.category3, asOf: f.asOf ?? null }
+    { category3: f.category3, asOf: f.asOf ?? null, weekStart: f.weekStart ?? null }
+  );
+}
+
+// 특정 키워드의 주간 언급 추이 — 키워드 선택 시 차트가 이 데이터로 전환.
+export type KeywordTrendPoint = {
+  week: { value: string };
+  mentions: number;
+  negative_mentions: number;
+};
+
+export async function fetchKeywordTrend(f: {
+  category3: string;
+  keyword: string;
+  asOf?: string | null;
+}): Promise<KeywordTrendPoint[]> {
+  return query<KeywordTrendPoint>(
+    `
+    WITH ref AS (SELECT ${AS_OF_DATE} AS d)
+    SELECT week_start AS week,
+           SUM(mentions) AS mentions,
+           SUM(negative_mentions) AS negative_mentions
+    FROM \`wanted-data.wanted_ml_voc.voc_keyword_trend\`, ref
+    WHERE week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
+      AND week_start <= ref.d
+      AND top_category3 = @category3
+      AND keyword = @keyword
+    GROUP BY week ORDER BY week
+    `,
+    { category3: f.category3, keyword: f.keyword, asOf: f.asOf ?? null }
   );
 }
 
@@ -403,13 +448,21 @@ export async function fetchCategoryTickets(f: {
   asOf?: string | null;
   onlyNegative?: boolean;
   weekStart?: string | null; // 지정 시 [weekStart, weekStart+6] 7일 창만
+  keyword?: string | null;   // 지정 시 제목/주제/원문에 키워드 포함 티켓만
 }): Promise<CategoryTicket[]> {
   const negFilter = f.onlyNegative ? `AND overall_emotion = '부정'` : '';
   const dateRange = f.weekStart
     ? `AND DATE(event_create_time, 'Asia/Seoul') >= @weekStart
-       AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(@weekStart, INTERVAL 6 DAY)`
+       AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(SAFE_CAST(@weekStart AS DATE), INTERVAL 6 DAY)`
     : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(ref.d, INTERVAL 84 DAY)
        AND DATE(event_create_time, 'Asia/Seoul') <= ref.d`;
+  const keywordFilter = f.keyword
+    ? `AND (
+         CONTAINS_SUBSTR(title, @keyword)
+         OR CONTAINS_SUBSTR(main_topic, @keyword)
+         OR CONTAINS_SUBSTR(detail, @keyword)
+       )`
+    : '';
   return query<CategoryTicket>(
     `
     WITH ref AS (SELECT ${AS_OF_DATE} AS d)
@@ -421,6 +474,7 @@ export async function fetchCategoryTickets(f: {
       AND (@category1 IS NULL OR category1 = @category1)
       ${dateRange}
       ${negFilter}
+      ${keywordFilter}
     ORDER BY (overall_emotion = '부정') DESC, event_create_time DESC
     LIMIT 30
     `,
@@ -430,86 +484,12 @@ export async function fetchCategoryTickets(f: {
       category3: f.category3 ?? null,
       asOf: f.asOf ?? null,
       weekStart: f.weekStart ?? null,
+      keyword: f.keyword ?? null,
     }
   );
 }
 
-// ────────────────────────────────────────────────────────────────────
-// 부정 감정 delta — 최근 7일 부정률 vs 직전 28일 baseline 부정률 (pp)
-// (카테고리 SURGE와 동일한 window 정의로 통일)
-// ────────────────────────────────────────────────────────────────────
-
-export type NegDeltaRow = {
-  category1: string;
-  category2: string;
-  recent_tickets: number;
-  recent_negative: number;
-  baseline_tickets: number;
-  baseline_negative: number;
-  recent_pct: number | null;
-  baseline_pct: number | null;
-  delta_pp: number | null;
-};
-
-export async function fetchNegDelta(
-  category1?: string | null,
-  asOf?: string | null,
-  category2?: string | null,
-): Promise<NegDeltaRow[]> {
-  return query<NegDeltaRow>(
-    `
-    WITH ref AS (SELECT ${AS_OF_DATE} AS d),
-    recent AS (
-      SELECT category1, category2,
-             SUM(tickets) AS tickets, SUM(negative_tickets) AS neg
-      FROM \`wanted-data.wanted_ml_voc.voc_daily\`, ref
-      WHERE date >= DATE_SUB(ref.d, INTERVAL 6 DAY) AND date <= ref.d
-        AND category2 != '(미분류)'
-        AND (@category1 IS NULL OR category1 = @category1)
-        AND (@category2 IS NULL OR category2 = @category2)
-      GROUP BY category1, category2
-    ),
-    baseline AS (
-      SELECT category1, category2,
-             SUM(tickets) AS tickets, SUM(negative_tickets) AS neg
-      FROM \`wanted-data.wanted_ml_voc.voc_daily\`, ref
-      WHERE date >= DATE_SUB(ref.d, INTERVAL 34 DAY)
-        AND date <= DATE_SUB(ref.d, INTERVAL 7 DAY)
-        AND category2 != '(미분류)'
-        AND (@category1 IS NULL OR category1 = @category1)
-        AND (@category2 IS NULL OR category2 = @category2)
-      GROUP BY category1, category2
-    )
-    SELECT
-      COALESCE(r.category1, b.category1) AS category1,
-      COALESCE(r.category2, b.category2) AS category2,
-      COALESCE(r.tickets, 0) AS recent_tickets,
-      COALESCE(r.neg, 0) AS recent_negative,
-      COALESCE(b.tickets, 0) AS baseline_tickets,
-      COALESCE(b.neg, 0) AS baseline_negative,
-      ROUND(SAFE_DIVIDE(r.neg, r.tickets) * 100, 1) AS recent_pct,
-      ROUND(SAFE_DIVIDE(b.neg, b.tickets) * 100, 1) AS baseline_pct,
-      ROUND(
-        (COALESCE(SAFE_DIVIDE(r.neg, r.tickets), 0)
-         - COALESCE(SAFE_DIVIDE(b.neg, b.tickets), 0)) * 100,
-        1
-      ) AS delta_pp
-    FROM recent r
-    FULL OUTER JOIN baseline b USING (category1, category2)
-    WHERE COALESCE(r.tickets, 0) >= 5 AND COALESCE(b.tickets, 0) >= 20
-    ORDER BY ABS(
-      COALESCE(SAFE_DIVIDE(r.neg, r.tickets), 0)
-      - COALESCE(SAFE_DIVIDE(b.neg, b.tickets), 0)
-    ) DESC NULLS LAST
-    LIMIT 20
-    `,
-    {
-      category1: category1 ?? null,
-      category2: category2 ?? null,
-      asOf: asOf ?? null,
-    }
-  );
-}
+// (부정 감정 delta 섹션은 감정 필터 도입으로 제거됨 — git history 참고)
 
 // ────────────────────────────────────────────────────────────────────
 // MTD summary
@@ -527,11 +507,13 @@ export async function fetchMtdSummary(
   category1?: string | null,
   category2?: string | null,
   category3?: string | null,
+  emotion?: EmotionKey | null,
 ): Promise<MtdSummary | null> {
   const catFilter = `
     AND (@category1 IS NULL OR category1 = @category1)
     AND (@category2 IS NULL OR category2 = @category2)
     AND (@category3 IS NULL OR category3 = @category3)
+    AND (@emo IS NULL OR emotion = @emo)
   `;
   const rows = await query<MtdSummary>(
     `
@@ -560,6 +542,7 @@ export async function fetchMtdSummary(
       category1: category1 ?? null,
       category2: category2 ?? null,
       category3: category3 ?? null,
+      emo: emoParam(emotion),
     }
   );
   return rows[0] ?? null;
