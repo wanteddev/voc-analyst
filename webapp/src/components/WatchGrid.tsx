@@ -48,7 +48,12 @@ export function WatchGrid({
       router.push(buildProductHref({ category2: null, category3: null }, filters));
       return;
     }
+    // 카드의 유저/기업(category1)도 seg에 반영 — 같은 중/소분류가 유저·기업 양쪽에
+    // 존재할 때 두 카드가 동시에 선택돼 보이는 모호함 제거.
+    const seg: 'all' | 'user' | 'company' =
+      s.category1 === '유저' ? 'user' : s.category1 === '기업' ? 'company' : filters.seg;
     router.push(buildProductHref({
+      seg,
       category2: s.category2,
       category3: s.category3 && s.category3 !== '(미분류)' ? s.category3 : null,
     }, filters));
@@ -102,6 +107,21 @@ export function WatchGrid({
               }}
             >
               <div className="cat">
+                {s.category1 && s.category1 !== '(미분류)' && (
+                  <span style={{
+                    fontSize: 10.5,
+                    fontFamily: 'var(--mono)',
+                    color: 'var(--text-mute)',
+                    marginRight: 6,
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    background: 'var(--panel-2)',
+                    border: '1px solid var(--border)',
+                    verticalAlign: 'middle',
+                  }}>
+                    {s.category1}
+                  </span>
+                )}
                 {s.category2 || '—'} <span className="p">/</span> {s.category3 || '—'}
               </div>
               <div className="ratio" style={{ color: ratioColor }} title={`평시 대비 ${s.ratio.toFixed(2)}배`}>{s.ratio.toFixed(2)}×</div>
