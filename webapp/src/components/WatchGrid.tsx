@@ -124,12 +124,15 @@ export function WatchGrid({
                 )}
                 {s.category2 || '—'} <span className="p">/</span> {s.category3 || '—'}
               </div>
+              <div className="count" title={`최근 7일간 접수된 문의 수`}>
+                {s.recent_7d}<em>건 · 최근 7일</em>
+              </div>
               <div className="ratio" style={{ color: ratioColor }} title={`평시 대비 ${s.ratio.toFixed(2)}배`}>{s.ratio.toFixed(2)}×</div>
               <div
                 className="footline"
-                title={`이 카테고리 최근 7일간 ${s.recent_7d}건 · 지난 4주 하루 평균 ${s.baseline_daily_avg.toFixed(2)}건`}
+                title={`지난 4주 하루 평균 ${s.baseline_daily_avg.toFixed(2)}건`}
               >
-                <span>최근 7일 {s.recent_7d}건 · 평시 {s.baseline_daily_avg.toFixed(2)}건/일</span>
+                <span>평시 {s.baseline_daily_avg.toFixed(2)}건/일</span>
                 <span className={s.recent_negative_ratio && s.recent_negative_ratio > 0.2 ? 'neg' : ''}>
                   {s.recent_negative_ratio != null
                     ? `부정 ${(s.recent_negative_ratio * 100).toFixed(0)}%`
