@@ -49,7 +49,8 @@ push 후 Backyard MCP `restart_component(name="proj-a2qqw2", component="frontend
 
 ## 성능·안정성 노트
 
-- 페이지 `revalidate = 60` — 필터 조합별 응답 60초 캐시 (BQ quota 관리)
+- **Redis 캐시 (lazy)** — `src/lib/cache.ts` + `bq.ts` cache-aside. 같은 SQL+params는 25h 캐시 → BQ 쿼리는 필터 조합당 하루 1회. `REDIS_URL` 없으면 자동 no-op (로컬 개발 영향 없음). Backyard Redis: `redis://prj-redis-a2qqw2:6379`
+- 페이지 `revalidate = 60` — 필터 조합별 응답 60초 캐시 (Next.js 레벨 1차 방어)
 - `fetchAllSurges` 단일 스냅샷 → `deriveStatusSummary` + `deriveGridSurges` in-memory 파생 → StatusOverview와 WatchGrid 카운트 항상 일관
 - `app/product/error.tsx` — BQ quota / 인증 만료 시 우아한 에러 UI
 - 채팅 SSE 스트리밍 (`app/api/chat/route.ts`) · 도구 호출 rows 최대 100행 cap · CSV 다운로드 지원

@@ -45,8 +45,9 @@ export default function ProductError({
           {isQuota
             ? (<>
                 오늘 BigQuery 쿼리 한도(<code style={{ fontFamily: 'var(--mono)' }}>QueryUsagePerUserPerDay</code>)에
-                도달했습니다. 필터를 자주 변경하면 각 조합마다 새 쿼리가 실행되어 축적됩니다.<br />
-                <b>매일 자정(UTC)에 자동 리셋</b>되며, 그 전에 필요한 경우 관리자에게 한도 상향을 요청해 주세요.
+                도달했습니다.<br />
+                <b>매일 태평양 시간 자정(한국 시간 오후 4~5시)에 자동 리셋</b>되며,
+                그 전에 필요한 경우 관리자에게 한도 상향을 요청해 주세요.
               </>)
             : isAuth
             ? '서버의 서비스 계정 인증이 만료됐습니다. 관리자에게 재발급을 요청해 주세요.'
