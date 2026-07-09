@@ -37,6 +37,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="sub">wanted_ml_voc</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <a
+                href="/admin"
+                title="관리자 — 사용 현황 (비밀번호 필요)"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 6,
+                  border: '1px solid var(--border)', background: 'var(--panel-2)',
+                  color: 'var(--text-dim)', fontSize: 12, textDecoration: 'none',
+                }}
+              >
+                <span aria-hidden>🔒</span> 관리자
+              </a>
               <ThemeToggle />
               <div className="badge">
                 <span className="dot"></span>
