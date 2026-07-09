@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { TrackView } from '@/components/TrackView';
 
 export const metadata: Metadata = {
   title: 'VOC Dashboard',
@@ -45,6 +47,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </nav>
         <main className="container">{children}</main>
         <ChatSidebar />
+        <Suspense fallback={null}>
+          <TrackView />
+        </Suspense>
       </body>
     </html>
   );

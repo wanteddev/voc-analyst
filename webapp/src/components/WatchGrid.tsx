@@ -4,6 +4,7 @@ import { useRef, useEffect, KeyboardEvent, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DrilldownPanel } from './DrilldownPanel';
 import { buildProductHref, type ProductFilters } from '@/lib/product-url';
+import { track } from '@/lib/track-client';
 
 type SurgeItem = {
   surge_level: 'SURGE' | 'WATCH' | 'IMPROVED' | 'STABLE';
@@ -52,6 +53,7 @@ export function WatchGrid({
     // 존재할 때 두 카드가 동시에 선택돼 보이는 모호함 제거.
     const seg: 'all' | 'user' | 'company' =
       s.category1 === '유저' ? 'user' : s.category1 === '기업' ? 'company' : filters.seg;
+    track('drilldown_open', { detail: `${s.category1}/${s.category2}/${s.category3}` });
     router.push(buildProductHref({
       seg,
       category2: s.category2,

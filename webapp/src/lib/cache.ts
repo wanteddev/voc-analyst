@@ -8,6 +8,12 @@ type RedisLike = {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, mode: string, ttl: number): Promise<unknown>;
   on(event: string, cb: (...args: unknown[]) => void): unknown;
+  // Streams (이벤트 트래킹용) — events.ts에서 사용
+  xadd(...args: (string | number)[]): Promise<string | null>;
+  xrevrange(
+    key: string, end: string, start: string, countToken: string, count: number
+  ): Promise<Array<[string, string[]]>>;
+  xlen(key: string): Promise<number>;
 };
 
 let redis: RedisLike | null = null;
@@ -41,6 +47,14 @@ async function getRedis(): Promise<RedisLike | null> {
     console.error('[cache] redis init failed:', e);
     return null;
   }
+}
+
+// 이벤트 트래킹(events.ts)이 XADD/XREVRANGE에 쓰는 raw 클라이언트. 캐시와 같은 연결 재사용.
+// REDIS 없거나 비정상이면 null → events.ts가 조용히 no-op.
+export async function redisClient(): Promise<RedisLike | null> {
+  const r = await getRedis();
+  if (!r || !healthy) return null;
+  return r;
 }
 
 export function cacheKey(sql: string, params?: Record<string, unknown>): string {

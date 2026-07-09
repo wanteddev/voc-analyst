@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { TOOL_SCHEMA, runTool } from '@/lib/agent-tools';
+import { logEvent, clientIp } from '@/lib/events';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -108,6 +109,10 @@ export async function POST(req: NextRequest) {
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
 
+  // 에이전트 사용 트래킹용 — IP 익명 + 마지막 사용자 질문
+  const ip = clientIp(req.headers);
+  const lastUser = [...userMessages].reverse().find(m => m.role === 'user')?.content ?? '';
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (ev: SSEEvent) => controller.enqueue(sseEncode(ev));
@@ -126,6 +131,7 @@ export async function POST(req: NextRequest) {
           ...userMessages.map(m => ({ role: m.role, content: m.content })),
         ];
         const toolTrace: Array<{ name: string; input: unknown; output: unknown }> = [];
+        let totalTokens = 0;
 
         for (let step = 0; step < 8; step++) {
           send({ type: 'status', step, message: '분석 중' });
@@ -139,12 +145,28 @@ export async function POST(req: NextRequest) {
           });
 
           stopKeepalive();
+          totalTokens += resp.usage?.total_tokens ?? 0;
 
           const msg = resp.choices[0].message;
           messages.push(msg);
 
           if (!msg.tool_calls || msg.tool_calls.length === 0) {
             const text = (msg.content ?? '').trim() || '(응답 없음)';
+            // 에이전트 질의 트래킹 — 입력·LLM이 생성한 SQL·토큰·응답 미리보기
+            const sqls = toolTrace
+              .filter(t => t.name === 'run_bigquery')
+              .map(t => (t.input as { sql?: string })?.sql || '')
+              .filter(Boolean);
+            await logEvent({
+              ts: Date.now(),
+              ip,
+              type: 'agent_query',
+              prompt: lastUser.slice(0, 500),
+              sql: sqls.join(' ||| ').slice(0, 2000),
+              steps: toolTrace.length,
+              tokens: totalTokens,
+              answer_preview: text.slice(0, 300),
+            });
             // Emit final content in one chunk (streamed token delta not needed since already blocking-complete)
             send({ type: 'token', delta: text });
             send({ type: 'done', content: text, tool_trace: toolTrace });

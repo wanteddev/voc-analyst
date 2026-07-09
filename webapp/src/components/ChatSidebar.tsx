@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { track } from '@/lib/track-client';
 
 type ToolTrace = {
   name: string;
@@ -177,7 +178,7 @@ export function ChatSidebar() {
   return (
     <>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(o => { if (!o) track('chat_open'); return !o; })}
         aria-label="분석 에이전트 열기"
         style={{
           position: 'fixed', right: open ? 380 : 16, bottom: 20,
