@@ -42,7 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 title="관리자 — 사용 현황 (비밀번호 필요)"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '4px 10px', borderRadius: 6,
+                  height: 32, boxSizing: 'border-box',
+                  padding: '0 12px', borderRadius: 8,
                   border: '1px solid var(--border)', background: 'var(--panel-2)',
                   color: 'var(--text-dim)', fontSize: 12, textDecoration: 'none',
                 }}
@@ -50,10 +51,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span aria-hidden>🔒</span> 관리자
               </a>
               <ThemeToggle />
-              <div className="badge">
-                <span className="dot"></span>
-                live
-              </div>
             </div>
           </div>
         </nav>
