@@ -369,9 +369,12 @@ export function DrilldownPanel({
               <div className="tk-list" style={{ marginTop: 6 }}>
                 {data.tickets.map(t => {
                   const isOpen = expanded.has(t.id);
-                  const dot = t.overall_emotion === '부정' ? 'var(--surge)'
+                  const emoColor = t.overall_emotion === '부정' ? 'var(--surge)'
                             : t.overall_emotion === '긍정' ? 'var(--good)'
-                            : 'var(--text-mute)';
+                            : 'var(--text-dim)';
+                  const emoLabel = t.overall_emotion === '부정' ? '부정'
+                            : t.overall_emotion === '긍정' ? '긍정'
+                            : '중립';
                   return (
                     <div key={t.id}
                          title={isOpen ? '클릭하여 접기' : '클릭하여 원문 펼치기'}
@@ -393,9 +396,14 @@ export function DrilldownPanel({
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{
-                            display: 'inline-block', width: 6, height: 6, borderRadius: 3,
-                            background: dot,
-                          }} />
+                            fontFamily: 'var(--mono)', fontSize: 10,
+                            color: emoColor,
+                            border: `1px solid ${emoColor}`,
+                            borderRadius: 4, padding: '1px 5px',
+                            lineHeight: 1.3,
+                          }}>
+                            {emoLabel}
+                          </span>
                           <span style={{
                             fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-mute)',
                           }}>

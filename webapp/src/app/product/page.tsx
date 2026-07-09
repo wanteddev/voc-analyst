@@ -24,6 +24,7 @@ import { FilterAdd, type FilterOptions } from '@/components/FilterAdd';
 import { StatusOverview } from '@/components/StatusOverview';
 import { DateFilter } from '@/components/DateFilter';
 import { WeeklySummary } from '@/components/WeeklySummary';
+import { LegendPopover } from '@/components/LegendPopover';
 import { fetchWeeklyInsights } from '@/lib/insights';
 
 // revalidate 60초 · URL 조합별 캐시 → 필터 반복 클릭 시 BQ 재조회 최소화.
@@ -145,26 +146,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
             데이터 최신 반영 · {lastDataDate}
           </span>
         )}
-        <span
-          title={
-            '색상 범례:\n' +
-            '● 빨강 = 급증 (평시 대비 크게 늘어남)\n' +
-            '● 노랑 = 주의 (평시 대비 다소 늘어남)\n' +
-            '● 회색 = 안정 (평시 수준)\n' +
-            '● 초록 = 개선 (평시 대비 줄어듦)'
-          }
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 20, height: 20, borderRadius: 10,
-            background: 'var(--panel-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-mute)',
-            fontFamily: 'var(--mono)', fontSize: 11,
-            cursor: 'help',
-            userSelect: 'none',
-          }}
-          aria-label="색상 범례"
-        >?</span>
+        <LegendPopover />
       </div>
 
       <div className="filter-sticky">

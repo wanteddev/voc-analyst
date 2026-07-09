@@ -37,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="sub">wanted_ml_voc</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ThemeToggle />
               <a
                 href="/admin"
                 title="관리자 — 사용 현황 (비밀번호 필요)"
@@ -50,7 +51,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 <span aria-hidden>🔒</span> 관리자
               </a>
-              <ThemeToggle />
             </div>
           </div>
         </nav>
