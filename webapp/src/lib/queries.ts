@@ -378,27 +378,48 @@ export type CategoryKeyword = {
   negative_mentions: number;
 };
 
+// 키워드 집계는 현재 드릴다운 카테고리(cat1/cat2/cat3)로 스코프해 원천 테이블에서 직접
+// 산출. voc_keyword_trend는 키워드를 전 카테고리 기준으로 집계하고 top_category3(대표값)로만
+// 버킷팅하므로 카테고리별 정확 카운트가 불가능 — 그래서 원천 UNNEST로 대체(티켓 쿼리와 동일 스코프).
+// event_create_time 파티션 범위를 asOf 기준으로 좁혀 스캔 비용 방어.
 export async function fetchCategoryKeywords(f: {
-  category3: string;
+  category1?: string | null;
+  category2: string;
+  category3?: string | null;
   asOf?: string | null;
-  weekStart?: string | null; // 지정 시 해당 주(월요일 시작)만
+  weekStart?: string | null; // 지정 시 해당 주(월요일 시작) 7일만
 }): Promise<CategoryKeyword[]> {
-  const weekFilter = f.weekStart
-    ? `AND week_start = SAFE_CAST(@weekStart AS DATE)`
-    : `AND week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
-       AND week_start <= ref.d`;
+  const dateWindow = f.weekStart
+    ? `AND DATE(event_create_time, 'Asia/Seoul') >= SAFE_CAST(@weekStart AS DATE)
+       AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(SAFE_CAST(@weekStart AS DATE), INTERVAL 6 DAY)`
+    : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(${AS_OF_DATE}, INTERVAL 84 DAY)
+       AND DATE(event_create_time, 'Asia/Seoul') <= ${AS_OF_DATE}`;
   return query<CategoryKeyword>(
     `
-    WITH ref AS (SELECT ${AS_OF_DATE} AS d)
-    SELECT keyword, SUM(mentions) AS mentions, SUM(negative_mentions) AS negative_mentions
-    FROM \`wanted-data.wanted_ml_voc.voc_keyword_trend\`, ref
-    WHERE top_category3 = @category3
-      ${weekFilter}
+    SELECT TRIM(kw) AS keyword,
+           COUNT(*) AS mentions,
+           COUNTIF(overall_emotion = '부정') AS negative_mentions
+    FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`,
+         UNNEST(SPLIT(keywords, ',')) AS kw
+    WHERE event_create_time >= TIMESTAMP(DATE_SUB(${AS_OF_DATE}, INTERVAL 100 DAY), 'Asia/Seoul')
+      AND event_create_time <  TIMESTAMP(DATE_ADD(${AS_OF_DATE}, INTERVAL 1 DAY), 'Asia/Seoul')
+      AND keywords IS NOT NULL AND keywords != ''
+      AND LENGTH(TRIM(kw)) >= 2
+      AND category2 = @category2
+      AND (@category1 IS NULL OR category1 = @category1)
+      AND (@category3 IS NULL OR category3 = @category3)
+      ${dateWindow}
     GROUP BY keyword
     ORDER BY mentions DESC
     LIMIT 15
     `,
-    { category3: f.category3, asOf: f.asOf ?? null, weekStart: f.weekStart ?? null }
+    {
+      category1: f.category1 ?? null,
+      category2: f.category2,
+      category3: f.category3 ?? null,
+      asOf: f.asOf ?? null,
+      weekStart: f.weekStart ?? null,
+    }
   );
 }
 
@@ -409,25 +430,39 @@ export type KeywordTrendPoint = {
   negative_mentions: number;
 };
 
+// 선택 키워드 주간 언급 추이 — 키워드 칩과 동일하게 카테고리 스코프로 원천 집계.
 export async function fetchKeywordTrend(f: {
-  category3: string;
+  category1?: string | null;
+  category2: string;
+  category3?: string | null;
   keyword: string;
   asOf?: string | null;
 }): Promise<KeywordTrendPoint[]> {
   return query<KeywordTrendPoint>(
     `
-    WITH ref AS (SELECT ${AS_OF_DATE} AS d)
-    SELECT week_start AS week,
-           SUM(mentions) AS mentions,
-           SUM(negative_mentions) AS negative_mentions
-    FROM \`wanted-data.wanted_ml_voc.voc_keyword_trend\`, ref
-    WHERE week_start >= DATE_SUB(ref.d, INTERVAL 12 WEEK)
-      AND week_start <= ref.d
-      AND top_category3 = @category3
-      AND keyword = @keyword
+    SELECT DATE_TRUNC(DATE(event_create_time, 'Asia/Seoul'), WEEK(MONDAY)) AS week,
+           COUNT(*) AS mentions,
+           COUNTIF(overall_emotion = '부정') AS negative_mentions
+    FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`,
+         UNNEST(SPLIT(keywords, ',')) AS kw
+    WHERE event_create_time >= TIMESTAMP(DATE_SUB(${AS_OF_DATE}, INTERVAL 100 DAY), 'Asia/Seoul')
+      AND event_create_time <  TIMESTAMP(DATE_ADD(${AS_OF_DATE}, INTERVAL 1 DAY), 'Asia/Seoul')
+      AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(${AS_OF_DATE}, INTERVAL 84 DAY)
+      AND DATE(event_create_time, 'Asia/Seoul') <= ${AS_OF_DATE}
+      AND keywords IS NOT NULL AND keywords != ''
+      AND TRIM(kw) = @keyword
+      AND category2 = @category2
+      AND (@category1 IS NULL OR category1 = @category1)
+      AND (@category3 IS NULL OR category3 = @category3)
     GROUP BY week ORDER BY week
     `,
-    { category3: f.category3, keyword: f.keyword, asOf: f.asOf ?? null }
+    {
+      category1: f.category1 ?? null,
+      category2: f.category2,
+      category3: f.category3 ?? null,
+      keyword: f.keyword,
+      asOf: f.asOf ?? null,
+    }
   );
 }
 

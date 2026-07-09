@@ -36,12 +36,12 @@ export async function GET(req: NextRequest) {
     const [trend, keywords, tickets, keywordTrend] = await Promise.all([
       fetchCategoryTrend({ category1, category2, category3 }),
       category3
-        ? fetchCategoryKeywords({ category3, weekStart })
+        ? fetchCategoryKeywords({ category1, category2, category3, weekStart })
         : Promise.resolve([]),
       fetchCategoryTickets({ category1, category2, category3, onlyNegative, weekStart, keyword }),
       // 키워드 선택 시 차트를 키워드 언급 추이로 전환
       keyword && category3
-        ? fetchKeywordTrend({ category3, keyword })
+        ? fetchKeywordTrend({ category1, category2, category3, keyword })
         : Promise.resolve(null),
     ]);
     return NextResponse.json(
