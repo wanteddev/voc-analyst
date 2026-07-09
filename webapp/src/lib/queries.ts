@@ -456,9 +456,13 @@ export async function fetchCategoryTickets(f: {
        AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(SAFE_CAST(@weekStart AS DATE), INTERVAL 6 DAY)`
     : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(ref.d, INTERVAL 84 DAY)
        AND DATE(event_create_time, 'Asia/Seoul') <= ref.d`;
+  // 키워드 매칭은 트렌드 집계와 동일 소스인 keywords 컬럼(콤마 구분) 정확 매칭을
+  // 우선하고, 본문 텍스트 검색을 OR로 더해 recall을 넓힘. keywords 컬럼을 빼면
+  // ML이 추출한 정규화 키워드(예: "채용 공고")가 본문에 그대로 없을 때 0건이 됨.
   const keywordFilter = f.keyword
     ? `AND (
-         CONTAINS_SUBSTR(title, @keyword)
+         EXISTS (SELECT 1 FROM UNNEST(SPLIT(keywords, ',')) kw WHERE TRIM(kw) = @keyword)
+         OR CONTAINS_SUBSTR(title, @keyword)
          OR CONTAINS_SUBSTR(main_topic, @keyword)
          OR CONTAINS_SUBSTR(detail, @keyword)
        )`
