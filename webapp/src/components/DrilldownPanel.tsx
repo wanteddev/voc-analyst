@@ -143,8 +143,8 @@ export function DrilldownPanel({
     ? '주간 부정률 (%) · 12주 창'
     : '주간 티켓 추이 · 12주 창';
   const keywordEyebrow = isNeg
-    ? `부정 키워드 · 12주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`
-    : `상위 키워드 · 12주 창 · 회색 = 총 언급 · 빨강 = 부정 티켓 내 언급 ${category3 ? '' : '(category3 지정 시)'}`;
+    ? `부정 키워드 · 12주 창 · 회색 = 티켓 수 · 빨강 = 부정 티켓 수 ${category3 ? '' : '(category3 지정 시)'}`
+    : `상위 키워드 · 12주 창 · 회색 = 티켓 수 · 빨강 = 부정 티켓 수 ${category3 ? '' : '(category3 지정 시)'}`;
   const ticketsEyebrow = isNeg
     ? '부정 티켓 · 12주 창'
     : '원문 티켓 · 12주 창 (부정 우선)';
@@ -231,7 +231,7 @@ export function DrilldownPanel({
             <div>
               <div className="eyebrow">
                 {isKeywordChart
-                  ? <>{'\''}{selectedKeyword}{'\''} 주간 언급 추이 · 12주 창</>
+                  ? <>{'\''}{selectedKeyword}{'\''} 주간 티켓 수 추이 · 12주 창</>
                   : trendEyebrow}
                 {' · '}
                 <span style={{ color: 'var(--text-dim)' }}>포인트 클릭 → 그 주로 필터</span>
@@ -277,8 +277,8 @@ export function DrilldownPanel({
                     const tip = isSel
                       ? `'${k.keyword}' 필터 해제`
                       : k.negative_mentions > 0
-                      ? `'${k.keyword}' — 총 ${k.mentions}회 언급 · 부정 티켓에서 ${k.negative_mentions}회 (${negPct}%) · 클릭하여 필터`
-                      : `'${k.keyword}' — 총 ${k.mentions}회 언급 · 클릭하여 필터`;
+                      ? `'${k.keyword}' — 티켓 ${k.mentions}건 · 부정 ${k.negative_mentions}건 (${negPct}%) · 클릭하여 필터`
+                      : `'${k.keyword}' — 티켓 ${k.mentions}건 · 클릭하여 필터`;
                     return (
                       <button
                         key={k.keyword}
@@ -300,7 +300,7 @@ export function DrilldownPanel({
                         }}
                       >
                         <span style={{ color: 'var(--text)' }}>{k.keyword}</span>
-                        <span style={{ color: 'var(--text-mute)' }}>{k.mentions}회</span>
+                        <span style={{ color: 'var(--text-mute)' }}>{k.mentions}건</span>
                         {k.negative_mentions > 0 && (
                           <span style={{ color: 'var(--surge)' }}>부정 {k.negative_mentions}</span>
                         )}

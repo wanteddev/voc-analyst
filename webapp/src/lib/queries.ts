@@ -397,8 +397,8 @@ export async function fetchCategoryKeywords(f: {
   return query<CategoryKeyword>(
     `
     SELECT TRIM(kw) AS keyword,
-           COUNT(*) AS mentions,
-           COUNTIF(overall_emotion = '부정') AS negative_mentions
+           COUNT(DISTINCT id) AS mentions,
+           COUNT(DISTINCT IF(overall_emotion = '부정', id, NULL)) AS negative_mentions
     FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`,
          UNNEST(SPLIT(keywords, ',')) AS kw
     WHERE event_create_time >= TIMESTAMP(DATE_SUB(${AS_OF_DATE}, INTERVAL 100 DAY), 'Asia/Seoul')
@@ -441,8 +441,8 @@ export async function fetchKeywordTrend(f: {
   return query<KeywordTrendPoint>(
     `
     SELECT DATE_TRUNC(DATE(event_create_time, 'Asia/Seoul'), WEEK(MONDAY)) AS week,
-           COUNT(*) AS mentions,
-           COUNTIF(overall_emotion = '부정') AS negative_mentions
+           COUNT(DISTINCT id) AS mentions,
+           COUNT(DISTINCT IF(overall_emotion = '부정', id, NULL)) AS negative_mentions
     FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`,
          UNNEST(SPLIT(keywords, ',')) AS kw
     WHERE event_create_time >= TIMESTAMP(DATE_SUB(${AS_OF_DATE}, INTERVAL 100 DAY), 'Asia/Seoul')
@@ -491,16 +491,11 @@ export async function fetchCategoryTickets(f: {
        AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(SAFE_CAST(@weekStart AS DATE), INTERVAL 6 DAY)`
     : `AND DATE(event_create_time, 'Asia/Seoul') >= DATE_SUB(ref.d, INTERVAL 84 DAY)
        AND DATE(event_create_time, 'Asia/Seoul') <= ref.d`;
-  // 키워드 매칭은 트렌드 집계와 동일 소스인 keywords 컬럼(콤마 구분) 정확 매칭을
-  // 우선하고, 본문 텍스트 검색을 OR로 더해 recall을 넓힘. keywords 컬럼을 빼면
-  // ML이 추출한 정규화 키워드(예: "채용 공고")가 본문에 그대로 없을 때 0건이 됨.
+  // 키워드 매칭 = keywords 컬럼(ML 추출) 정확 매칭. 키워드 칩·추이와 동일 기준이라
+  // "칩 N건 = 원문 티켓 N건"이 보장됨. 본문 텍스트 CONTAINS는 칩(keywords 집계)과
+  // 기준이 달라 리스트가 칩보다 커지는 불일치를 유발하므로 쓰지 않음.
   const keywordFilter = f.keyword
-    ? `AND (
-         EXISTS (SELECT 1 FROM UNNEST(SPLIT(keywords, ',')) kw WHERE TRIM(kw) = @keyword)
-         OR CONTAINS_SUBSTR(title, @keyword)
-         OR CONTAINS_SUBSTR(main_topic, @keyword)
-         OR CONTAINS_SUBSTR(detail, @keyword)
-       )`
+    ? `AND EXISTS (SELECT 1 FROM UNNEST(SPLIT(keywords, ',')) kw WHERE TRIM(kw) = @keyword)`
     : '';
   return query<CategoryTicket>(
     `
