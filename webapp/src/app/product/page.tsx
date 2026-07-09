@@ -23,6 +23,8 @@ import { CategoryChip } from '@/components/CategoryChip';
 import { FilterAdd, type FilterOptions } from '@/components/FilterAdd';
 import { StatusOverview } from '@/components/StatusOverview';
 import { DateFilter } from '@/components/DateFilter';
+import { WeeklySummary } from '@/components/WeeklySummary';
+import { fetchWeeklyInsights } from '@/lib/insights';
 
 // revalidate 60초 · URL 조합별 캐시 → 필터 반복 클릭 시 BQ 재조회 최소화.
 // (일일 quota 초과 방지)
@@ -91,11 +93,12 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
 
   const filters: ProductFilters = { seg, levels, emotion, category2, category3, asOf };
 
-  const [allSurges, newKeywords, mtd, lastDataDate] = await Promise.all([
+  const [allSurges, newKeywords, mtd, lastDataDate, weeklyInsights] = await Promise.all([
     fetchAllSurges(category1, asOf, category2, category3, emotion),
     fetchNewKeywords(category1, asOf, category3),
     fetchMtdSummary(asOf, category1, category2, category3, emotion),
     fetchLastDataDate(),
+    fetchWeeklyInsights(asOf), // whole-service (필터 무관) — Redis 캐시로 마진 비용 최소
   ]);
   const statusSummary = deriveStatusSummary(allSurges);
   const gridSurges = deriveGridSurges(allSurges, levels);
@@ -205,6 +208,8 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
             : null}
         </div>
       )}
+
+      <WeeklySummary insights={weeklyInsights} asOf={asOf} />
 
       <section>
         <div className="section-hdr">
