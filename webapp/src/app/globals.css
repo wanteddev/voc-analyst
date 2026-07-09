@@ -1,5 +1,6 @@
 /* Design tokens — dark-first, warm neutral bias, semantic status colors */
 :root {
+  color-scheme: dark;
   --ground: #0e0f12;
   --panel: #171921;
   --panel-2: #1e2029;
@@ -32,6 +33,7 @@
 }
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --ground: #f6f4ef;
     --panel: #ffffff;
     --panel-2: #fbfaf6;
@@ -57,6 +59,7 @@
 
 /* 사용자가 명시적으로 선택한 테마 — 미디어 쿼리보다 우선. specificity 0,2,0 이라 winning. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --ground: #0e0f12;
   --panel: #171921;
   --panel-2: #1e2029;
@@ -79,6 +82,7 @@
   --seq-5: #f3cd7a;
 }
 :root[data-theme="light"] {
+  color-scheme: light;
   --ground: #f6f4ef;
   --panel: #ffffff;
   --panel-2: #fbfaf6;

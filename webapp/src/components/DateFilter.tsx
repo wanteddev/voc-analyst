@@ -124,7 +124,6 @@ export function DateFilter({ filters, today }: Props) {
             padding: 0,
             outline: 'none',
             cursor: 'pointer',
-            colorScheme: 'dark light',
           }}
         />
       </label>

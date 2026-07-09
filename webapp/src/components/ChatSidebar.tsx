@@ -179,22 +179,24 @@ export function ChatSidebar() {
     <>
       <button
         onClick={() => setOpen(o => { if (!o) track('chat_open'); return !o; })}
-        aria-label="분석 에이전트 열기"
+        aria-label={open ? '분석 에이전트 닫기' : '에이전트와 대화하기'}
         style={{
           position: 'fixed', right: open ? 380 : 16, bottom: 20,
           zIndex: 20,
           background: 'var(--accent)',
           border: 'none',
           color: '#fff',
-          width: 48, height: 48, borderRadius: 24,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: open ? 48 : 'auto', height: 48, borderRadius: 24,
+          padding: open ? 0 : '0 18px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           cursor: 'pointer',
           boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
-          fontSize: 20,
+          fontSize: open ? 20 : 14, fontWeight: 500,
+          whiteSpace: 'nowrap',
           transition: 'right .18s',
         }}
       >
-        {open ? '›' : '💬'}
+        {open ? '›' : <><span aria-hidden>💬</span> 에이전트와 대화하기</>}
       </button>
 
       <aside
