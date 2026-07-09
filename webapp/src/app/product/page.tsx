@@ -15,7 +15,8 @@ import {
   type SurgeLevel,
   type EmotionKey,
 } from '@/lib/queries';
-import type { ProductFilters } from '@/lib/product-url';
+import Link from 'next/link';
+import { buildProductHref, type ProductFilters } from '@/lib/product-url';
 import { WatchGrid } from '@/components/WatchGrid';
 import { LevelPill } from '@/components/LevelPill';
 import { CategoryChip } from '@/components/CategoryChip';
@@ -121,6 +122,9 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
   })();
 
   const segLabel = seg === 'user' ? '유저' : seg === 'company' ? '기업' : null;
+  // 기준일(asOf) 외 모든 필터가 하나라도 활성이면 '전체 해제' 노출
+  const hasActiveFilters =
+    seg !== 'all' || levels.length > 0 || emotion !== 'all' || !!category2 || !!category3;
 
   return (
     <div className="page">
@@ -162,6 +166,25 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
         {category3 && <CategoryChip kind="category3" value={category3} filters={filters} />}
         {emotion !== 'all' && (
           <CategoryChip kind="emotion" value={EMOTION_LABEL[emotion]} filters={filters} />
+        )}
+        {hasActiveFilters && (
+          <Link
+            href={buildProductHref(
+              { seg: 'all', levels: [], emotion: 'all', category2: null, category3: null },
+              filters
+            )}
+            data-hint="모든 필터 해제 (기준일은 유지)"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              height: 30, boxSizing: 'border-box',
+              padding: '0 8px', borderRadius: 6,
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--text-mute)', fontSize: 11, fontFamily: 'var(--mono)',
+              textDecoration: 'none',
+            }}
+          >
+            × 전체 해제
+          </Link>
         )}
         <DateFilter filters={filters} today={today} />
       </div>

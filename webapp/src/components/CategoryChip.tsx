@@ -30,7 +30,8 @@ export function CategoryChip({
       data-hint={`${label} 필터: ${value} · × 클릭하여 해제`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '3px 4px 3px 8px',
+        height: 30, boxSizing: 'border-box',
+        padding: '0 4px 0 8px',
         borderRadius: 6,
         background: 'var(--panel-2)',
         border: '1px solid var(--border-strong)',

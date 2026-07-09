@@ -103,7 +103,7 @@ export function FilterAdd({
         aria-expanded={open}
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: 28, height: 28, borderRadius: 8,
+          width: 30, height: 30, boxSizing: 'border-box', borderRadius: 8,
           background: open ? 'var(--panel-2)' : 'var(--panel)',
           border: '1px solid var(--border)',
           color: 'var(--text-dim)',

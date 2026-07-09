@@ -43,8 +43,9 @@ export function LevelPill({
 
   return (
     <div style={{
-      display: 'inline-flex', gap: 2,
-      padding: 3,
+      display: 'inline-flex', gap: 2, alignItems: 'center',
+      height: 30, boxSizing: 'border-box',
+      padding: '0 3px',
       background: 'var(--panel)',
       border: '1px solid var(--border)',
       borderRadius: 8,

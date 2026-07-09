@@ -64,11 +64,11 @@ export function DateFilter({ filters, today }: Props) {
   return (
     <div style={{
       display: 'inline-flex', gap: 2, marginLeft: 'auto', alignItems: 'center',
-      padding: 3,
+      height: 30, boxSizing: 'border-box',
+      padding: '0 3px',
       background: 'var(--panel)',
       border: '1px solid var(--border)',
       borderRadius: 8,
-      flexWrap: 'wrap',
     }}>
       {presets.map(p => {
         const active = currentKey === p.key;
