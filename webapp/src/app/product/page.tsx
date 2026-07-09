@@ -18,8 +18,8 @@ import {
 import type { ProductFilters } from '@/lib/product-url';
 import { WatchGrid } from '@/components/WatchGrid';
 import { LevelPill } from '@/components/LevelPill';
-import { EmotionFilter } from '@/components/EmotionFilter';
 import { CategoryChip } from '@/components/CategoryChip';
+import { EMOTION_LABEL } from '@/lib/level';
 import { FilterAdd, type FilterOptions } from '@/components/FilterAdd';
 import { StatusOverview } from '@/components/StatusOverview';
 import { DateFilter } from '@/components/DateFilter';
@@ -128,7 +128,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
         <p className="eyebrow" style={{ margin: 0 }}>Product Insights — 프로덕트 이슈 발굴</p>
         {lastDataDate && (
           <span
-            title="데이터 파이프라인에 반영된 마지막 날짜. 새 티켓은 다음 배치에 반영됩니다."
+            data-hint="데이터 파이프라인에 반영된 마지막 날짜. 새 티켓은 다음 배치에 반영됩니다."
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '3px 8px', borderRadius: 4,
@@ -152,21 +152,23 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
       <div className="filter-sticky">
         <span
           className="label"
-          title="pill·chip을 조합해 범위를 좁혀보세요. + 로 분류 필터를 추가하고, chip의 ×로 해제합니다."
+          data-hint="pill·chip을 조합해 범위를 좁혀보세요. + 로 분류 필터를 추가하고, chip의 ×로 해제합니다."
           style={{ cursor: 'help' }}
         >필터</span>
         <FilterAdd filters={filters} options={filterOptions} />
         <LevelPill filters={filters} summary={statusSummary} />
-        <EmotionFilter filters={filters} />
         {segLabel && <CategoryChip kind="category1" value={segLabel} filters={filters} />}
         {category2 && <CategoryChip kind="category2" value={category2} filters={filters} />}
         {category3 && <CategoryChip kind="category3" value={category3} filters={filters} />}
+        {emotion !== 'all' && (
+          <CategoryChip kind="emotion" value={EMOTION_LABEL[emotion]} filters={filters} />
+        )}
         <DateFilter filters={filters} today={today} />
       </div>
 
       {mtd && (
         <div
-          title="이번 달 1일부터 기준일까지 누적된 티켓 수 · 전월 동기간과 비교"
+          data-hint="이번 달 1일부터 기준일까지 누적된 티켓 수 · 전월 동기간과 비교"
           style={{
             fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)',
             cursor: 'help',
@@ -195,7 +197,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
 
       <section>
         <div className="section-hdr">
-          <h2 title="최근 7일 티켓 수를 직전 4주 평시와 비교해 카테고리별 상태(급증/주의/안정/개선)를 분류"
+          <h2 data-hint="최근 7일 티켓 수를 직전 4주 평시와 비교해 카테고리별 상태(급증/주의/안정/개선)를 분류"
               style={{ cursor: 'help' }}>주간 시그널 · 7일 창</h2>
           <span className="hint">
             {windowLabel(asOf, 7)} · 블럭 클릭 → 상단 필터에 반영 (다중 선택 가능)
@@ -206,7 +208,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
 
       <section>
         <div className="section-hdr" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <h2 title="급증한 순서로 카테고리 정렬. 카드 클릭 시 상세 드릴다운 오픈 + 상단 필터에 중/소분류 추가"
+          <h2 data-hint="급증한 순서로 카테고리 정렬. 카드 클릭 시 상세 드릴다운 오픈 + 상단 필터에 중/소분류 추가"
               style={{ marginRight: 8, cursor: 'help' }}>카테고리 목록 · 7일 창</h2>
           <span className="hint" style={{ marginLeft: 'auto' }}>
             {gridSurges.length}건 · 카드 클릭 → 상단 필터에 중/소분류 추가
@@ -218,7 +220,7 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
 
       <section className="card">
         <div className="section-hdr">
-          <h2 title="직전 2주엔 거의 없던 새로운 키워드가 최근 2주에 자주 등장한 것들"
+          <h2 data-hint="직전 2주엔 거의 없던 새로운 키워드가 최근 2주에 자주 등장한 것들"
               style={{ cursor: 'help' }}>신규 등장 키워드 · 2주 창</h2>
           <span className="hint">직전 2주 언급 2회 미만 · 최근 2주 언급 3회 이상</span>
         </div>

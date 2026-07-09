@@ -4,6 +4,7 @@ import './globals.css';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { TrackView } from '@/components/TrackView';
+import { HintLayer } from '@/components/HintLayer';
 
 export const metadata: Metadata = {
   title: 'VOC Dashboard',
@@ -40,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <ThemeToggle />
               <a
                 href="/admin"
-                title="관리자 — 사용 현황 (비밀번호 필요)"
+                data-hint="관리자 — 사용 현황 (비밀번호 필요)"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   height: 32, boxSizing: 'border-box',
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </nav>
         <main className="container">{children}</main>
         <ChatSidebar />
+        <HintLayer />
         <Suspense fallback={null}>
           <TrackView />
         </Suspense>

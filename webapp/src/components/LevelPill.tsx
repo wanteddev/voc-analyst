@@ -58,7 +58,7 @@ export function LevelPill({
           <Link
             key={key}
             href={hrefFor(key)}
-            title={`${label} · ${count}개 카테고리${key !== 'ALL' && !active ? ' (클릭하여 필터 추가)' : ''}`}
+            data-hint={`${label} · ${count}개 카테고리${key !== 'ALL' && !active ? ' (클릭하여 필터 추가)' : ''}`}
             style={{
               padding: '4px 10px',
               borderRadius: 6,

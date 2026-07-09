@@ -65,7 +65,7 @@ export function ThemeToggle() {
             type="button"
             role="radio"
             aria-checked={active}
-            title={it.title}
+            data-hint={it.title}
             onClick={() => pick(it.key)}
             style={{
               padding: '4px 8px',

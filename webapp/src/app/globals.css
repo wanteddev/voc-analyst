@@ -1,4 +1,8 @@
 /* Design tokens — dark-first, warm neutral bias, semantic status colors */
+/* 날짜 입력 네이티브 캘린더 인디케이터 숨김 — 커스텀 🗓️ 아이콘으로 대체 (DateFilter) */
+.date-input-bare::-webkit-calendar-picker-indicator { display: none; }
+.date-input-bare::-webkit-inner-spin-button { display: none; }
+
 :root {
   color-scheme: dark;
   --ground: #0e0f12;

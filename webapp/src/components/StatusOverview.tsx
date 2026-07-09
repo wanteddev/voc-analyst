@@ -49,7 +49,7 @@ export function StatusOverview({
               className={`kpi ${meta.klass}`}
               role="button"
               aria-pressed={active}
-              title={`${meta.label} · 클릭하여 상단 필터 ${active ? '해제' : '적용'} (다중 선택 가능)`}
+              data-hint={`${meta.label} · 클릭하여 상단 필터 ${active ? '해제' : '적용'} (다중 선택 가능)`}
               style={{
                 cursor: 'pointer',
                 outline: active ? '2px solid var(--accent)' : 'none',
@@ -68,7 +68,7 @@ export function StatusOverview({
                 {cats}<em style={{ fontSize: 14, marginLeft: 6, color: 'var(--text-mute)' }}>개 카테고리</em>
               </div>
               <div className="meta" style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span title={`이 상태 카테고리 전체의 최근 7일 티켓 합계 · 전체 대비 ${share.toFixed(0)}%`}>
+                <span data-hint={`이 상태 카테고리 전체의 최근 7일 티켓 합계 · 전체 대비 ${share.toFixed(0)}%`}>
                   <b style={{ color: 'var(--text-dim)' }}>{tk.toLocaleString()}</b>
                   <span style={{ color: 'var(--text-mute)' }}>건 · 최근 7일</span>
                   {tk > 0 && (
@@ -79,7 +79,7 @@ export function StatusOverview({
                 </span>
                 {neg > 0 && (
                   <span
-                    title="이 중 부정 감정으로 분류된 티켓 수"
+                    data-hint="이 중 부정 감정으로 분류된 티켓 수"
                     style={{ color: 'var(--surge)', fontFamily: 'var(--mono)', fontSize: 11 }}
                   >
                     부정 {neg}

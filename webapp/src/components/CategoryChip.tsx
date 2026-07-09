@@ -7,6 +7,7 @@ const META = {
   category1: { label: '대분류' },
   category2: { label: '중분류' },
   category3: { label: '소분류' },
+  emotion: { label: '감정' },
 } as const;
 
 export function CategoryChip({
@@ -22,10 +23,11 @@ export function CategoryChip({
   const patch =
     kind === 'category1' ? { seg: 'all' as const }
     : kind === 'category2' ? { category2: null }
-    : { category3: null };
+    : kind === 'category3' ? { category3: null }
+    : { emotion: 'all' as const };
   return (
     <span
-      title={`${label} 필터: ${value} · × 클릭하여 해제`}
+      data-hint={`${label} 필터: ${value} · × 클릭하여 해제`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '3px 4px 3px 8px',
@@ -40,7 +42,7 @@ export function CategoryChip({
       <span style={{ color: 'var(--text)' }}>{value}</span>
       <Link
         href={buildProductHref(patch, filters)}
-        title="이 필터 해제"
+        data-hint="이 필터 해제"
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           width: 16, height: 16, borderRadius: 3,

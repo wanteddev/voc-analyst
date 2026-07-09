@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { buildProductHref, type ProductFilters } from '@/lib/product-url';
 
 type Props = {
@@ -33,6 +33,7 @@ function computePresets(yesterdayStr: string): Array<{ key: string; label: strin
 
 export function DateFilter({ filters, today }: Props) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const yesterday = useMemo(() => {
     const [y, m, d] = today.split('-').map(Number);
     const t = new Date(Date.UTC(y, m - 1, d));
@@ -75,7 +76,7 @@ export function DateFilter({ filters, today }: Props) {
           <Link
             key={p.key}
             href={buildProductHref({ asOf: p.asOf }, filters)}
-            title={p.asOf ? `기준일 · ${p.asOf}` : '어제 기준'}
+            data-hint={p.asOf ? `기준일 · ${p.asOf}` : '어제 기준'}
             style={{
               padding: '4px 10px',
               borderRadius: 6,
@@ -92,7 +93,7 @@ export function DateFilter({ filters, today }: Props) {
         );
       })}
       <label
-        title="기준 시점 직접 선택 (최근 180일 이내, 최대 어제까지)"
+        data-hint="기준 시점 직접 선택 (최근 180일 이내, 최대 어제까지)"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -107,9 +108,10 @@ export function DateFilter({ filters, today }: Props) {
           cursor: 'pointer',
         }}
       >
-        <span aria-hidden>📅</span>
         <input
+          ref={inputRef}
           type="date"
+          className="date-input-bare"
           value={displayDate}
           min={minDate}
           max={yesterday}
@@ -126,6 +128,16 @@ export function DateFilter({ filters, today }: Props) {
             cursor: 'pointer',
           }}
         />
+        <span
+          aria-hidden
+          onClick={(e) => {
+            e.preventDefault();
+            inputRef.current?.showPicker?.();
+          }}
+          style={{ fontSize: 14, lineHeight: 1, cursor: 'pointer' }}
+        >
+          🗓️
+        </span>
       </label>
     </div>
   );

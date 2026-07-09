@@ -5,12 +5,17 @@ import {
   fetchCategoryTickets,
   fetchKeywordTrend,
 } from '@/lib/queries';
+import type { EmotionKey } from '@/lib/level';
 
 export const runtime = 'nodejs';
 export const revalidate = 0;
 
 const ALLOWED_CATEGORY1 = new Set(['유저', '기업']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseEmotion(v: string | null): EmotionKey {
+  return v === 'negative' || v === 'positive' || v === 'neutral' ? v : 'all';
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -33,17 +38,18 @@ export async function GET(req: NextRequest) {
   const weekStart = weekStartRaw && DATE_RE.test(weekStartRaw) ? weekStartRaw : null;
   const keyword = keywordRaw ? keywordRaw.slice(0, 60).trim() || null : null;
   const asOf = asOfRaw && DATE_RE.test(asOfRaw) ? asOfRaw : null;
+  const emotion = parseEmotion(searchParams.get('emo'));
 
   try {
     const [trend, keywords, tickets, keywordTrend] = await Promise.all([
-      fetchCategoryTrend({ category1, category2, category3, asOf }),
+      fetchCategoryTrend({ category1, category2, category3, asOf, emotion }),
       category3
-        ? fetchCategoryKeywords({ category1, category2, category3, asOf, weekStart })
+        ? fetchCategoryKeywords({ category1, category2, category3, asOf, weekStart, emotion })
         : Promise.resolve([]),
-      fetchCategoryTickets({ category1, category2, category3, asOf, onlyNegative, weekStart, keyword }),
+      fetchCategoryTickets({ category1, category2, category3, asOf, onlyNegative, weekStart, keyword, emotion }),
       // 키워드 선택 시 차트를 키워드 언급 추이로 전환
       keyword && category3
-        ? fetchKeywordTrend({ category1, category2, category3, asOf, keyword })
+        ? fetchKeywordTrend({ category1, category2, category3, asOf, keyword, emotion })
         : Promise.resolve(null),
     ]);
     return NextResponse.json(

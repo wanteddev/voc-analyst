@@ -37,7 +37,7 @@ export function WeeklySummary({
     <section className="card">
       <div className="section-hdr">
         <h2
-          title="현재 필터와 무관하게 서비스 전체 기준으로 이번 주 주목할 신호를 요약합니다."
+          data-hint="현재 필터와 무관하게 서비스 전체 기준으로 이번 주 주목할 신호를 요약합니다."
           style={{ cursor: 'help' }}
         >
           이번 주 요약
@@ -93,7 +93,7 @@ export function WeeklySummary({
               key={i}
               href={buildProductHref(item.link, base)}
               style={{ ...style, cursor: 'pointer', color: 'inherit' }}
-              title="클릭 → 상단 필터에 반영해 상세 보기"
+              data-hint="클릭 → 상단 필터에 반영해 상세 보기"
             >
               {inner}
             </Link>

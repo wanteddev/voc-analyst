@@ -95,7 +95,7 @@ export function WatchGrid({
               tabIndex={0}
               aria-expanded={!!isSelected}
               aria-label={`드릴다운 + 필터 ${s.category2} / ${s.category3}`}
-              title={
+              data-hint={
                 isSelected
                   ? '클릭하여 이 카테고리 필터·드릴다운 해제'
                   : '클릭 → 상단 필터에 이 카테고리 추가 + 드릴다운 오픈'
@@ -126,13 +126,13 @@ export function WatchGrid({
                 )}
                 {s.category2 || '—'} <span className="p">/</span> {s.category3 || '—'}
               </div>
-              <div className="count" title={`최근 7일간 접수된 문의 수`}>
+              <div className="count" data-hint={`최근 7일간 접수된 문의 수`}>
                 {s.recent_7d}<em>건 · 최근 7일</em>
               </div>
-              <div className="ratio" style={{ color: ratioColor }} title={`평시 대비 ${s.ratio.toFixed(2)}배`}>{s.ratio.toFixed(2)}×</div>
+              <div className="ratio" style={{ color: ratioColor }} data-hint={`평시 대비 ${s.ratio.toFixed(2)}배`}>{s.ratio.toFixed(2)}×</div>
               <div
                 className="footline"
-                title={`지난 4주 하루 평균 ${s.baseline_daily_avg.toFixed(2)}건`}
+                data-hint={`지난 4주 하루 평균 ${s.baseline_daily_avg.toFixed(2)}건`}
               >
                 <span>평시 {s.baseline_daily_avg.toFixed(2)}건/일</span>
                 <span className={s.recent_negative_ratio && s.recent_negative_ratio > 0.2 ? 'neg' : ''}>
@@ -153,6 +153,7 @@ export function WatchGrid({
             category2={drill.category2}
             category3={drill.category3}
             asOf={filters.asOf}
+            emotion={filters.emotion}
             onClose={() =>
               router.push(buildProductHref({ category2: null, category3: null }, filters))
             }

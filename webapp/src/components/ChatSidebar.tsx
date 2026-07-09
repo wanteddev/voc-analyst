@@ -348,7 +348,7 @@ function MessageBubble({ msg }: { msg: Msg }) {
         <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             onClick={() => downloadCSV(msg.trace!)}
-            title="참고한 원본 데이터를 CSV로 다운로드"
+            data-hint="참고한 원본 데이터를 CSV로 다운로드"
             style={{
               padding: '4px 10px', borderRadius: 4,
               background: 'var(--panel)',

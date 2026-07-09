@@ -349,6 +349,7 @@ export async function fetchCategoryTrend(f: {
   category2: string;
   category3?: string | null;
   asOf?: string | null;
+  emotion?: EmotionKey | null;
 }): Promise<CategoryTrendPoint[]> {
   return query<CategoryTrendPoint>(
     `
@@ -361,6 +362,7 @@ export async function fetchCategoryTrend(f: {
       AND category2 = @category2
       AND (@category3 IS NULL OR category3 = @category3)
       AND (@category1 IS NULL OR category1 = @category1)
+      AND (@emo IS NULL OR emotion = @emo)
     GROUP BY week ORDER BY week
     `,
     {
@@ -368,6 +370,7 @@ export async function fetchCategoryTrend(f: {
       category2: f.category2,
       category3: f.category3 ?? null,
       asOf: f.asOf ?? null,
+      emo: emoParam(f.emotion),
     }
   );
 }
@@ -388,6 +391,7 @@ export async function fetchCategoryKeywords(f: {
   category3?: string | null;
   asOf?: string | null;
   weekStart?: string | null; // 지정 시 해당 주(월요일 시작) 7일만
+  emotion?: EmotionKey | null;
 }): Promise<CategoryKeyword[]> {
   const dateWindow = f.weekStart
     ? `AND DATE(event_create_time, 'Asia/Seoul') >= SAFE_CAST(@weekStart AS DATE)
@@ -408,6 +412,7 @@ export async function fetchCategoryKeywords(f: {
       AND category2 = @category2
       AND (@category1 IS NULL OR category1 = @category1)
       AND (@category3 IS NULL OR category3 = @category3)
+      AND (@emo IS NULL OR overall_emotion = @emo)
       ${dateWindow}
     GROUP BY keyword
     ORDER BY mentions DESC
@@ -419,6 +424,7 @@ export async function fetchCategoryKeywords(f: {
       category3: f.category3 ?? null,
       asOf: f.asOf ?? null,
       weekStart: f.weekStart ?? null,
+      emo: emoParam(f.emotion),
     }
   );
 }
@@ -437,6 +443,7 @@ export async function fetchKeywordTrend(f: {
   category3?: string | null;
   keyword: string;
   asOf?: string | null;
+  emotion?: EmotionKey | null;
 }): Promise<KeywordTrendPoint[]> {
   return query<KeywordTrendPoint>(
     `
@@ -454,6 +461,7 @@ export async function fetchKeywordTrend(f: {
       AND category2 = @category2
       AND (@category1 IS NULL OR category1 = @category1)
       AND (@category3 IS NULL OR category3 = @category3)
+      AND (@emo IS NULL OR overall_emotion = @emo)
     GROUP BY week ORDER BY week
     `,
     {
@@ -462,6 +470,7 @@ export async function fetchKeywordTrend(f: {
       category3: f.category3 ?? null,
       keyword: f.keyword,
       asOf: f.asOf ?? null,
+      emo: emoParam(f.emotion),
     }
   );
 }
@@ -484,8 +493,10 @@ export async function fetchCategoryTickets(f: {
   onlyNegative?: boolean;
   weekStart?: string | null; // 지정 시 [weekStart, weekStart+6] 7일 창만
   keyword?: string | null;   // 지정 시 제목/주제/원문에 키워드 포함 티켓만
+  emotion?: EmotionKey | null; // 상단 감정 필터 반영
 }): Promise<CategoryTicket[]> {
   const negFilter = f.onlyNegative ? `AND overall_emotion = '부정'` : '';
+  const emoFilter = `AND (@emo IS NULL OR overall_emotion = @emo)`;
   const dateRange = f.weekStart
     ? `AND DATE(event_create_time, 'Asia/Seoul') >= @weekStart
        AND DATE(event_create_time, 'Asia/Seoul') <= DATE_ADD(SAFE_CAST(@weekStart AS DATE), INTERVAL 6 DAY)`
@@ -508,6 +519,7 @@ export async function fetchCategoryTickets(f: {
       AND (@category1 IS NULL OR category1 = @category1)
       ${dateRange}
       ${negFilter}
+      ${emoFilter}
       ${keywordFilter}
     ORDER BY (overall_emotion = '부정') DESC, event_create_time DESC
     LIMIT 30
@@ -519,6 +531,7 @@ export async function fetchCategoryTickets(f: {
       asOf: f.asOf ?? null,
       weekStart: f.weekStart ?? null,
       keyword: f.keyword ?? null,
+      emo: emoParam(f.emotion),
     }
   );
 }

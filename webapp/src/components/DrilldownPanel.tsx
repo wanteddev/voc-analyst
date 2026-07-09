@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { TrendChart } from './TrendChart';
+import type { EmotionKey } from '@/lib/level';
 
 type TrendPoint = { week: { value: string }; tickets: number; negative_tickets: number };
 type Keyword = { keyword: string; mentions: number; negative_mentions: number };
@@ -29,6 +30,7 @@ export function DrilldownPanel({
   category2,
   category3,
   asOf = null,
+  emotion = 'all',
   focus = 'volume',
   onClose,
 }: {
@@ -36,6 +38,7 @@ export function DrilldownPanel({
   category2: string;
   category3: string | null;
   asOf?: string | null; // 상단 날짜 필터 기준 (null이면 API가 어제 default)
+  emotion?: EmotionKey; // 상단 감정 필터 반영
   focus?: Focus;
   onClose: () => void;
 }) {
@@ -69,6 +72,7 @@ export function DrilldownPanel({
     if (category3) qs.set('category3', category3);
     if (focus === 'negative') qs.set('focus', 'negative');
     if (asOf) qs.set('asOf', asOf);
+    if (emotion !== 'all') qs.set('emo', emotion);
     if (weekStart) qs.set('weekStart', weekStart);
     if (selectedKeyword) qs.set('keyword', selectedKeyword);
 
@@ -93,7 +97,7 @@ export function DrilldownPanel({
       .then(d => { if (!cancelled) setData(d); })
       .catch(e => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
-  }, [category1, category2, category3, asOf, focus, weekStart, selectedKeyword]);
+  }, [category1, category2, category3, asOf, emotion, focus, weekStart, selectedKeyword]);
 
   // 카테고리 변경 시 크로스 필터 초기화
   useEffect(() => {
@@ -285,7 +289,7 @@ export function DrilldownPanel({
                     return (
                       <button
                         key={k.keyword}
-                        title={tip}
+                        data-hint={tip}
                         onClick={() =>
                           setSelectedKeyword(prev => (prev === k.keyword ? null : k.keyword))
                         }
@@ -339,7 +343,7 @@ export function DrilldownPanel({
                     fontFamily: 'var(--mono)', fontSize: 10,
                     cursor: 'pointer',
                   }}
-                  title="주간 필터 해제 (12주 전체)"
+                  data-hint="주간 필터 해제 (12주 전체)"
                 >
                   × {weekStart.slice(5)} 주간
                 </button>
@@ -355,7 +359,7 @@ export function DrilldownPanel({
                     fontFamily: 'var(--mono)', fontSize: 10,
                     cursor: 'pointer',
                   }}
-                  title="키워드 필터 해제"
+                  data-hint="키워드 필터 해제"
                 >
                   × {selectedKeyword}
                 </button>
@@ -377,7 +381,7 @@ export function DrilldownPanel({
                             : '중립';
                   return (
                     <div key={t.id}
-                         title={isOpen ? '클릭하여 접기' : '클릭하여 원문 펼치기'}
+                         data-hint={isOpen ? '클릭하여 접기' : '클릭하여 원문 펼치기'}
                          onClick={() => {
                            const next = new Set(expanded);
                            if (isOpen) next.delete(t.id); else next.add(t.id);
@@ -436,7 +440,7 @@ export function DrilldownPanel({
                               copyToClipboard(t.id, t.detail_preview);
                             }}
                             aria-label="원문 복사"
-                            title={copiedId === t.id ? '복사됨' : '원문 클립보드 복사'}
+                            data-hint={copiedId === t.id ? '복사됨' : '원문 클립보드 복사'}
                             style={{
                               position: 'absolute',
                               top: 6, right: 6,

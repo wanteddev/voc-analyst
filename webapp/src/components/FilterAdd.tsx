@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildProductHref, type ProductFilters } from '@/lib/product-url';
+import type { EmotionKey } from '@/lib/level';
 
 // + 버튼 → 팝오버 2단계 (필터 종류 → 값 선택). 값 목록은 서버에서 내려준
-// allSurges distinct라 BQ 추가 쿼리 없음.
+// allSurges distinct라 BQ 추가 쿼리 없음. 감정 필터도 동일 UI로 통합.
 
 export type FilterOptions = {
   category1: Array<{ value: string; count: number }>;
@@ -13,12 +14,20 @@ export type FilterOptions = {
   category3: Array<{ value: string; count: number }>;
 };
 
-type Kind = 'category1' | 'category2' | 'category3';
+type Kind = 'category1' | 'category2' | 'category3' | 'emotion';
+type EmoOnly = Exclude<EmotionKey, 'all'>;
 
 const KIND_META: Array<{ kind: Kind; label: string; hint: string }> = [
   { kind: 'category1', label: '대분류', hint: '유저 / 기업' },
   { kind: 'category2', label: '중분류', hint: '계정, 수수료, 포지션 …' },
   { kind: 'category3', label: '소분류', hint: '비밀번호변경, 환불 …' },
+  { kind: 'emotion', label: '감정', hint: '부정 / 긍정 / 중립' },
+];
+
+const EMOTION_OPTIONS: Array<{ key: EmoOnly; label: string }> = [
+  { key: 'negative', label: '부정' },
+  { key: 'positive', label: '긍정' },
+  { key: 'neutral', label: '중립' },
 ];
 
 export function FilterAdd({
@@ -48,27 +57,37 @@ export function FilterAdd({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const list = useMemo(() => {
+  type ListItem = { value: string; count: number | null; emoKey: EmoOnly | null };
+  const list = useMemo<ListItem[]>(() => {
+    const q = search.trim().toLowerCase();
+    if (kind === 'emotion') {
+      return EMOTION_OPTIONS
+        .filter(o => !q || o.label.toLowerCase().includes(q))
+        .map(o => ({ value: o.label, count: null, emoKey: o.key }));
+    }
     if (!kind) return [];
     const all = options[kind];
-    const q = search.trim().toLowerCase();
-    return q ? all.filter(o => o.value.toLowerCase().includes(q)) : all;
+    return (q ? all.filter(o => o.value.toLowerCase().includes(q)) : all)
+      .map(o => ({ value: o.value, count: o.count, emoKey: null }));
   }, [kind, search, options]);
 
   // 이미 활성화된 필터 종류는 메뉴에서 숨김 (chip × 로 해제 후 다시 추가)
   const availableKinds = KIND_META.filter(m => {
     if (m.kind === 'category1') return filters.seg === 'all';
     if (m.kind === 'category2') return !filters.category2;
-    return !filters.category3;
+    if (m.kind === 'category3') return !filters.category3;
+    return filters.emotion === 'all'; // emotion
   });
 
-  function pick(value: string) {
+  function pick(item: ListItem) {
     const patch =
-      kind === 'category1'
-        ? { seg: (value === '유저' ? 'user' : 'company') as 'user' | 'company' }
+      kind === 'emotion'
+        ? { emotion: item.emoKey! }
+        : kind === 'category1'
+        ? { seg: (item.value === '유저' ? 'user' : 'company') as 'user' | 'company' }
         : kind === 'category2'
-        ? { category2: value }
-        : { category3: value };
+        ? { category2: item.value }
+        : { category3: item.value };
     setOpen(false);
     setKind(null);
     setSearch('');
@@ -79,7 +98,7 @@ export function FilterAdd({
     <div ref={rootRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
         onClick={() => { setOpen(o => !o); setKind(null); setSearch(''); }}
-        title="필터 추가 (대분류 / 중분류 / 소분류)"
+        data-hint="필터 추가 (대분류 / 중분류 / 소분류 / 감정)"
         aria-label="필터 추가"
         aria-expanded={open}
         style={{
@@ -166,7 +185,7 @@ export function FilterAdd({
                   list.map(o => (
                     <button
                       key={o.value}
-                      onClick={() => pick(o.value)}
+                      onClick={() => pick(o)}
                       style={{
                         width: '100%', textAlign: 'left',
                         padding: '6px 10px', borderRadius: 5,
@@ -178,9 +197,11 @@ export function FilterAdd({
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
                       <span>{o.value}</span>
-                      <span style={{
-                        fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-mute)',
-                      }}>{o.count}</span>
+                      {o.count != null && (
+                        <span style={{
+                          fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-mute)',
+                        }}>{o.count}</span>
+                      )}
                     </button>
                   ))
                 )}
