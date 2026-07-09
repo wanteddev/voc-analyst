@@ -177,13 +177,13 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               height: 30, boxSizing: 'border-box',
-              padding: '0 8px', borderRadius: 6,
-              border: '1px solid var(--border)', background: 'transparent',
-              color: 'var(--text-mute)', fontSize: 11, fontFamily: 'var(--mono)',
+              padding: '0 10px', borderRadius: 6,
+              border: '1px solid var(--border-strong)', background: 'var(--panel-2)',
+              color: 'var(--text-dim)', fontSize: 11, fontFamily: 'var(--mono)',
               textDecoration: 'none',
             }}
           >
-            × 전체 해제
+            전체 해제
           </Link>
         )}
         <DateFilter filters={filters} today={today} />
