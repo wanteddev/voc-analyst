@@ -28,12 +28,14 @@ export function DrilldownPanel({
   category1,
   category2,
   category3,
+  asOf = null,
   focus = 'volume',
   onClose,
 }: {
   category1: string | null;
   category2: string;
   category3: string | null;
+  asOf?: string | null; // 상단 날짜 필터 기준 (null이면 API가 어제 default)
   focus?: Focus;
   onClose: () => void;
 }) {
@@ -66,6 +68,7 @@ export function DrilldownPanel({
     qs.set('category2', category2);
     if (category3) qs.set('category3', category3);
     if (focus === 'negative') qs.set('focus', 'negative');
+    if (asOf) qs.set('asOf', asOf);
     if (weekStart) qs.set('weekStart', weekStart);
     if (selectedKeyword) qs.set('keyword', selectedKeyword);
 
@@ -90,7 +93,7 @@ export function DrilldownPanel({
       .then(d => { if (!cancelled) setData(d); })
       .catch(e => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
-  }, [category1, category2, category3, focus, weekStart, selectedKeyword]);
+  }, [category1, category2, category3, asOf, focus, weekStart, selectedKeyword]);
 
   // 카테고리 변경 시 크로스 필터 초기화
   useEffect(() => {

@@ -150,6 +150,7 @@ export function WatchGrid({
             category1={drill.category1}
             category2={drill.category2}
             category3={drill.category3}
+            asOf={filters.asOf}
             onClose={() =>
               router.push(buildProductHref({ category2: null, category3: null }, filters))
             }
