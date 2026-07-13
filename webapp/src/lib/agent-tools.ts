@@ -6,6 +6,7 @@ import { bq } from './bq';
 
 const ALLOWED_TABLES = [
   /`wanted-data\.wanted_ml_voc\.voc_daily`/,
+  /`wanted-data\.wanted_ml_voc\.voc_surge_score_at`/, // asOf TVF (대시보드와 동일 기준)
   /`wanted-data\.wanted_ml_voc\.voc_surge_score`/,
   /`wanted-data\.wanted_ml_voc\.voc_keyword_trend`/,
   /`wanted-data\.wanted_ml_voc\.voc_actions`/,
@@ -20,8 +21,9 @@ export const TOOL_SCHEMA = [
       name: 'run_bigquery',
       description:
         'BigQuery SELECT 쿼리를 실행하고 최대 100행을 반환합니다. ' +
-        '허용 테이블: wanted-data.wanted_ml_voc.voc_daily, voc_surge_score, voc_keyword_trend, ' +
-        'voc_actions, voc_actions_summary, wanted-data.wanted_ml.zendesk_voc_classified. ' +
+        '허용 테이블: wanted-data.wanted_ml_voc.voc_daily, voc_surge_score_at(TVF), voc_surge_score, ' +
+        'voc_keyword_trend, voc_actions, voc_actions_summary, wanted-data.wanted_ml.zendesk_voc_classified. ' +
+        '급증/감정 스코어는 대시보드와 동일하게 voc_surge_score_at(어제, NULL)을 우선 사용하세요. ' +
         '반드시 KST 타임존과 파티션 필터를 사용하세요.',
       parameters: {
         type: 'object' as const,

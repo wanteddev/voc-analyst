@@ -15,14 +15,15 @@ const SYSTEM_PROMPT = `당신은 원티드 VOC 분석 어시스턴트입니다.
 
 ## 데이터 소스 스키마 (컬럼명 정확히)
 
-### wanted-data.wanted_ml_voc.voc_surge_score  (카테고리별 급증 스코어)
+### wanted-data.wanted_ml_voc.voc_surge_score_at(as_of DATE, emo STRING)  (카테고리별 급증 스코어 · TVF)
 - surge_level STRING ('SURGE'|'WATCH'|'IMPROVED'|'STABLE')
 - category1 STRING, category2 STRING, category3 STRING
 - recent_7d INT64, recent_7d_negative INT64, baseline_28d INT64
 - recent_daily_avg FLOAT, baseline_daily_avg FLOAT, baseline_daily_stddev FLOAT
 - z_score FLOAT, ratio FLOAT, recent_negative_ratio FLOAT
-- ★ 시점 컬럼 없음. 항상 "지금 기준"의 스냅샷 view.
-- 예: SELECT surge_level, category3, recent_7d, ratio FROM \`wanted-data.wanted_ml_voc.voc_surge_score\` WHERE surge_level IN ('SURGE','WATCH') ORDER BY ratio DESC LIMIT 5
+- ★ 대시보드와 동일 기준을 쓰려면 as_of = 어제(DATE_SUB(CURRENT_DATE('Asia/Seoul'), INTERVAL 1 DAY)), emo = NULL(전체 감정). 특정 감정만 보려면 emo에 '부정'|'긍정'|'중립'.
+- ★ recent_7d = [as_of-6, as_of] 창. 대시보드 숫자와 일치시키려면 반드시 이 TVF(어제 기준)를 쓸 것. voc_surge_score(인자 없는 view)는 CURRENT_DATE(오늘, 적재 중) 기준이라 대시보드와 어긋날 수 있으니 지양.
+- 예: SELECT surge_level, category3, recent_7d, ratio FROM \`wanted-data.wanted_ml_voc.voc_surge_score_at\`(DATE_SUB(CURRENT_DATE('Asia/Seoul'), INTERVAL 1 DAY), NULL) WHERE surge_level IN ('SURGE','WATCH') ORDER BY ratio DESC LIMIT 5
 
 ### wanted-data.wanted_ml_voc.voc_daily  (일별 집계)
 - date DATE (KST)

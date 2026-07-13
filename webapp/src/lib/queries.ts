@@ -179,77 +179,10 @@ export function deriveGridSurges(rows: SurgeItem[], levels: SurgeLevel[]): Surge
   return sorted.slice(0, limit);
 }
 
-export async function fetchSurges(
-  category1?: string | null,
-  levels: SurgeLevel[] = [],
-  asOf?: string | null
-): Promise<SurgeItem[]> {
-  // 다중 선택: levels 비어있으면 all, 1개면 각 레벨 자체 정렬, 2+이면 결합 정렬(SURGE→WATCH→STABLE→IMPROVED, ratio desc)
-  const singleConfig: Record<SurgeLevel, { orderBy: string; limit: number; extra?: string }> = {
-    SURGE:    { orderBy: `ratio DESC`, limit: 20 },
-    WATCH:    { orderBy: `ratio DESC`, limit: 20 },
-    STABLE:   { orderBy: `recent_7d DESC`, limit: 20, extra: `AND recent_7d > 0` },
-    IMPROVED: { orderBy: `ratio ASC`, limit: 20 },
-  };
-  const combinedOrder =
-    `CASE surge_level WHEN 'SURGE' THEN 0 WHEN 'WATCH' THEN 1 WHEN 'STABLE' THEN 2 ELSE 3 END, ratio DESC`;
-
-  let levelFilter = 'TRUE';
-  let orderBy = combinedOrder;
-  let limit = 40;
-  if (levels.length === 1) {
-    const cfg = singleConfig[levels[0]];
-    levelFilter = `surge_level = '${levels[0]}' ${cfg.extra ?? ''}`.trim();
-    orderBy = cfg.orderBy;
-    limit = cfg.limit;
-  } else if (levels.length > 1) {
-    const inList = levels.map(l => `'${l}'`).join(',');
-    levelFilter = `surge_level IN (${inList})`;
-    orderBy = combinedOrder;
-    limit = 40;
-  }
-
-  return query<SurgeItem>(
-    `
-    SELECT surge_level, category1, category2, category3,
-           recent_7d, recent_7d_negative, baseline_28d,
-           recent_daily_avg, baseline_daily_avg, z_score, ratio, recent_negative_ratio
-    FROM ${surgeSource(asOf ?? null)}
-    WHERE ${levelFilter}
-      AND (@category1 IS NULL OR category1 = @category1)
-    ORDER BY ${orderBy}
-    LIMIT ${limit}
-    `,
-    { category1: category1 ?? null }
-  );
-}
-
 // ────────────────────────────────────────────────────────────────────
-// Segment summary — 세그먼트별 최근 7일 티켓 합 (SegFilter pill용)
-// ────────────────────────────────────────────────────────────────────
-
-export type SegSummary = { all: number; user: number; company: number };
-
-export async function fetchSegSummary(
-  asOf?: string | null,
-  emotion?: EmotionKey | null,
-): Promise<SegSummary> {
-  const rows = await query<{ category1: string; tickets: number }>(
-    `
-    SELECT category1, SUM(recent_7d) AS tickets
-    FROM ${surgeSource(asOf ?? null, emoParam(emotion))}
-    GROUP BY category1
-    `
-  );
-  const map = new Map(rows.map(r => [r.category1, Number(r.tickets) || 0]));
-  const user = map.get('유저') ?? 0;
-  const company = map.get('기업') ?? 0;
-  const all = Array.from(map.values()).reduce((s, n) => s + n, 0);
-  return { all, user, company };
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Status summary — surge_level별 카테고리 수 / recent_7d 티켓 합
+// Status summary type — deriveStatusSummary / StatusOverview / LevelPill 공용
+// (surge 소스를 SQL 필터로 재조회하던 fetchSurges/fetchSegSummary/fetchStatusSummary는
+//  in-memory 파생으로 대체되어 제거됨 — 뷰 간 카운트 불일치 방지)
 // ────────────────────────────────────────────────────────────────────
 
 export type StatusSummaryRow = {
@@ -258,24 +191,6 @@ export type StatusSummaryRow = {
   tickets: number;
   negative_tickets: number;
 };
-
-export async function fetchStatusSummary(
-  category1?: string | null,
-  asOf?: string | null
-): Promise<StatusSummaryRow[]> {
-  return query<StatusSummaryRow>(
-    `
-    SELECT surge_level,
-           COUNT(*) AS categories,
-           SUM(recent_7d) AS tickets,
-           SUM(recent_7d_negative) AS negative_tickets
-    FROM ${surgeSource(asOf ?? null)}
-    WHERE (@category1 IS NULL OR category1 = @category1)
-    GROUP BY surge_level
-    `,
-    { category1: category1 ?? null }
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────
 // New keywords (seg + asOf 필터)
