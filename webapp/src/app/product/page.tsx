@@ -95,21 +95,31 @@ export default async function ProductInsightsPage({ searchParams }: PageProps) {
 
   const filters: ProductFilters = { seg, levels, emotion, category2, category3, asOf };
 
-  const [allSurges, newKeywords, mtd, lastDataDate, weeklyInsights] = await Promise.all([
-    fetchAllSurges(category1, asOf, category2, category3, emotion),
+  // 급증 스냅샷은 카테고리 필터 없이 whole-service(현재 감정)로 한 번만 조회.
+  // 카테고리(대/중/소분류) 필터는 in-memory로 적용 → 한 카테고리의 surge_level이
+  // KPI·그리드·요약 모든 뷰에서 동일하게 유지됨(별도 필터 쿼리가 다른 시점에 캐시돼
+  // 경계값 카테고리가 뷰마다 SURGE↔WATCH로 갈리던 문제 제거). emotion=all이면
+  // WeeklySummary 내부 스냅샷과 키가 같아 single-flight로 BQ 1회만 실행.
+  const [snapshot, newKeywords, mtd, lastDataDate, weeklyInsights] = await Promise.all([
+    fetchAllSurges(null, asOf, null, null, emotion),
     fetchNewKeywords(category1, asOf, category3),
     fetchMtdSummary(asOf, category1, category2, category3, emotion),
     fetchLastDataDate(),
     fetchWeeklyInsights(asOf), // whole-service (필터 무관) — Redis 캐시로 마진 비용 최소
   ]);
-  const statusSummary = deriveStatusSummary(allSurges);
-  const gridSurges = deriveGridSurges(allSurges, levels);
+  const scoped = snapshot.filter(s =>
+    (category1 == null || s.category1 === category1) &&
+    (category2 == null || s.category2 === category2) &&
+    (category3 == null || s.category3 === category3)
+  );
+  const statusSummary = deriveStatusSummary(scoped);
+  const gridSurges = deriveGridSurges(scoped, levels);
 
-  // FilterAdd 팝오버 값 목록 — 현재 스냅샷에서 distinct 추출 (BQ 추가 쿼리 없음)
+  // FilterAdd 팝오버 값 목록 — 전체 스냅샷 기준 distinct (현재 필터와 무관하게 선택 가능)
   const filterOptions: FilterOptions = (() => {
     const agg = (key: 'category1' | 'category2' | 'category3') => {
       const map = new Map<string, number>();
-      for (const s of allSurges) {
+      for (const s of snapshot) {
         const v = s[key];
         if (!v || v === '(미분류)') continue;
         map.set(v, (map.get(v) ?? 0) + Number(s.recent_7d || 0));
