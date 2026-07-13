@@ -3,6 +3,7 @@
 // Schema uses OpenAI function-calling format (compatible with GPT-5 tool_use).
 
 import { bq } from './bq';
+import { maskPiiSql } from './pii';
 
 const ALLOWED_TABLES = [
   /`wanted-data\.wanted_ml_voc\.voc_daily`/,
@@ -108,7 +109,8 @@ export async function getTicketDetail(ticketId: string): Promise<
     const [rows] = await bq().query({
       query: `
         SELECT id, event_create_time, category1, category2, category3,
-               overall_emotion, main_topic, title, SUBSTR(detail, 1, 800) AS detail_preview, keywords
+               overall_emotion, main_topic, ${maskPiiSql('title')} AS title,
+               SUBSTR(${maskPiiSql('detail')}, 1, 800) AS detail_preview, keywords
         FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`
         WHERE id = @id
         LIMIT 1

@@ -1,4 +1,5 @@
 import { query } from './bq';
+import { maskPiiSql } from './pii';
 
 // ────────────────────────────────────────────────────────────────────
 // Segment filter helper — 서비스 카테고리1('유저'|'기업')로 스코프 좁힘
@@ -426,8 +427,9 @@ export async function fetchCategoryTickets(f: {
   return query<CategoryTicket>(
     `
     WITH ref AS (SELECT ${AS_OF_DATE} AS d)
-    SELECT id, event_create_time, category3, main_topic, title, overall_emotion,
-           SUBSTR(detail, 1, 3000) AS detail_preview
+    SELECT id, event_create_time, category3, main_topic,
+           ${maskPiiSql('title')} AS title, overall_emotion,
+           SUBSTR(${maskPiiSql('detail')}, 1, 3000) AS detail_preview
     FROM \`wanted-data.wanted_ml.zendesk_voc_classified\`, ref
     WHERE category2 = @category2
       AND (@category3 IS NULL OR category3 = @category3)
