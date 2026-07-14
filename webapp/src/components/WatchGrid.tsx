@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, KeyboardEvent, useMemo } from 'react';
+import { useRef, useEffect, KeyboardEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DrilldownPanel } from './DrilldownPanel';
 import { buildProductHref, type ProductFilters } from '@/lib/product-url';
@@ -26,6 +26,13 @@ export function WatchGrid({
 }) {
   const router = useRouter();
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // "더보기" 점진 노출 — 초기 PAGE개, 클릭 시 +PAGE. 필터가 바뀌면 초기값으로 리셋.
+  const PAGE = 40;
+  const [visible, setVisible] = useState(PAGE);
+  const filterSig =
+    `${filters.seg}|${filters.levels.join(',')}|${filters.category2}|${filters.category3}|${filters.emotion}|${filters.asOf}`;
+  useEffect(() => { setVisible(PAGE); }, [filterSig]);
 
   // Drill 상태는 URL의 cat2/cat3에서 파생 — 카드 클릭 = URL push, chip × = URL 제거.
   const drill = useMemo(() => {
@@ -64,7 +71,7 @@ export function WatchGrid({
   return (
     <div>
       <div className="watch-grid">
-        {surges.map(s => {
+        {surges.slice(0, visible).map(s => {
           const isSelected =
             drill &&
             drill.category2 === s.category2 &&
@@ -145,6 +152,22 @@ export function WatchGrid({
           );
         })}
       </div>
+
+      {surges.length > visible && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+          <button
+            onClick={() => setVisible(v => v + PAGE)}
+            data-hint={`현재 ${visible}개 표시 · 전체 ${surges.length}개`}
+            style={{
+              padding: '7px 16px', borderRadius: 8,
+              background: 'var(--panel-2)', border: '1px solid var(--border-strong)',
+              color: 'var(--text-dim)', fontSize: 12.5, cursor: 'pointer',
+            }}
+          >
+            더보기 ({surges.length - visible}개)
+          </button>
+        </div>
+      )}
 
       {drill && (
         <div ref={panelRef}>

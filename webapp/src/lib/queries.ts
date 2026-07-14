@@ -151,33 +151,28 @@ export function deriveStatusSummary(rows: SurgeItem[]): StatusSummaryRow[] {
     .filter(r => r.categories > 0);
 }
 
-// In-memory grid selection — 같은 스냅샷에서 필터·정렬·top N 파생.
+// In-memory grid selection — 같은 스냅샷에서 필터·정렬. 상한 없이 전체 정렬 리스트 반환
+// (노출 개수 제어·"더보기"는 WatchGrid 클라이언트가 담당).
 export function deriveGridSurges(rows: SurgeItem[], levels: SurgeLevel[]): SurgeItem[] {
   const priority: Record<SurgeLevel, number> = { SURGE: 0, WATCH: 1, STABLE: 2, IMPROVED: 3 };
-  let filtered = rows;
-  let limit = 40;
   if (levels.length === 1) {
     const one = levels[0];
-    filtered = rows.filter(r => r.surge_level === one);
+    let filtered = rows.filter(r => r.surge_level === one);
     if (one === 'STABLE') filtered = filtered.filter(r => Number(r.recent_7d) > 0);
-    limit = 20;
-    const sorted = [...filtered].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (one === 'STABLE') return Number(b.recent_7d) - Number(a.recent_7d);
       if (one === 'IMPROVED') return Number(a.ratio) - Number(b.ratio);
       return Number(b.ratio) - Number(a.ratio);
     });
-    return sorted.slice(0, limit);
   }
-  if (levels.length > 1) {
-    const set = new Set(levels);
-    filtered = rows.filter(r => set.has(r.surge_level));
-  }
-  const sorted = [...filtered].sort((a, b) => {
+  const filtered = levels.length > 1
+    ? rows.filter(r => new Set(levels).has(r.surge_level))
+    : rows;
+  return [...filtered].sort((a, b) => {
     const p = priority[a.surge_level] - priority[b.surge_level];
     if (p !== 0) return p;
     return Number(b.ratio) - Number(a.ratio);
   });
-  return sorted.slice(0, limit);
 }
 
 // ────────────────────────────────────────────────────────────────────
