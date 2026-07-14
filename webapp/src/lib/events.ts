@@ -62,6 +62,7 @@ export type UsageSummary = {
   sampled: number;
   by_type: Record<string, number>;
   unique_ips: number;
+  daily: Array<{ date: string; count: number }>;
   top_filters: Array<{ key: string; count: number }>;
   top_drilldowns: Array<{ key: string; count: number }>;
   recent_agent_queries: Array<{
@@ -69,10 +70,18 @@ export type UsageSummary = {
   }>;
 };
 
+// epoch(ms) → KST(UTC+9) 기준 YYYY-MM-DD
+function kstDate(ms: string): string | null {
+  const n = Number(ms);
+  if (!n) return null;
+  return new Date(n + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 // 이벤트 목록 → 사용 현황 집계. /api/usage와 /admin 페이지가 공용.
 export function aggregateUsage(events: StreamEvent[]): UsageSummary {
   const by_type: Record<string, number> = {};
   const ips = new Set<string>();
+  const dailyCount: Record<string, number> = {};
   const filterCount: Record<string, number> = {};
   const drilldownCount: Record<string, number> = {};
   const recent_agent_queries: UsageSummary['recent_agent_queries'] = [];
@@ -80,6 +89,8 @@ export function aggregateUsage(events: StreamEvent[]): UsageSummary {
   for (const { fields: f } of events) {
     if (f.type) by_type[f.type] = (by_type[f.type] ?? 0) + 1;
     if (f.ip) ips.add(f.ip);
+    const day = f.ts ? kstDate(f.ts) : null;
+    if (day) dailyCount[day] = (dailyCount[day] ?? 0) + 1;
     if (f.type === 'page_view') {
       const key = f.filters ? safeDecode(f.filters) : '(필터 없음)';
       filterCount[key] = (filterCount[key] ?? 0) + 1;
@@ -98,10 +109,15 @@ export function aggregateUsage(events: StreamEvent[]): UsageSummary {
   const topN = (m: Record<string, number>, n: number) =>
     Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, n).map(([key, count]) => ({ key, count }));
 
+  const daily = Object.entries(dailyCount)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     sampled: events.length,
     by_type,
     unique_ips: ips.size,
+    daily,
     top_filters: topN(filterCount, 20),
     top_drilldowns: topN(drilldownCount, 20),
     recent_agent_queries: recent_agent_queries.slice(0, 30),

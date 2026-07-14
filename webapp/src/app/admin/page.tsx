@@ -3,6 +3,7 @@ import { isAdminCookie, adminConfigured, ADMIN_COOKIE } from '@/lib/admin';
 import { recentEvents, streamLength, aggregateUsage } from '@/lib/events';
 import { AdminLogin } from './AdminLogin';
 import { AdminLogout } from './AdminLogout';
+import { TrendChart } from '@/components/TrendChart';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +71,23 @@ export default async function AdminPage() {
           </div>
         ))}
       </div>
+
+      {/* 일별 이용 추이 */}
+      <section className="card">
+        <div className="section-hdr">
+          <h2>일별 이용 추이</h2>
+          <span className="hint">이벤트 수 · 최근 {u.daily.length}일 · IP 익명</span>
+        </div>
+        {u.daily.length === 0 ? (
+          <p style={{ color: 'var(--text-mute)', fontSize: 12 }}>데이터 없음</p>
+        ) : (
+          <TrendChart
+            points={u.daily.map(d => ({ x: d.date.slice(5), y: d.count }))}
+            ariaLabel="일별 이용 이벤트 추이"
+            yFormat={(v) => `${v}건`}
+          />
+        )}
+      </section>
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 14, marginTop: 4,
