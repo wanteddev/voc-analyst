@@ -14,6 +14,7 @@ export function TrendChart({
   color = 'var(--accent)',
   ariaLabel = '트렌드 차트',
   yFormat,
+  yUnit,
   onPointClick,
   activeIndex,
 }: {
@@ -24,6 +25,7 @@ export function TrendChart({
   color?: string;
   ariaLabel?: string;
   yFormat?: (v: number) => string;
+  yUnit?: string; // 서버 컴포넌트에서 함수 대신 전달 (예: '건'). yFormat 없을 때 값 뒤에 붙임
   onPointClick?: (index: number, point: Point) => void;
   activeIndex?: number | null;
 }) {
@@ -61,7 +63,7 @@ export function TrendChart({
   const yTicks = Array.from({ length: ticks }, (_, i) => Math.round((geom.maxY / (ticks - 1)) * i));
   const gradId = `grad-${points.length}-${(baseline?.y ?? 0).toFixed(0)}`;
   const endpoint = points[points.length - 1];
-  const fmt = yFormat ?? ((v: number) => String(v));
+  const fmt = yFormat ?? ((v: number) => (yUnit ? `${v}${yUnit}` : String(v)));
 
   function handleMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current;

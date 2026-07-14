@@ -84,7 +84,7 @@ export default async function AdminPage() {
           <TrendChart
             points={u.daily.map(d => ({ x: d.date.slice(5), y: d.count }))}
             ariaLabel="일별 이용 이벤트 추이"
-            yFormat={(v) => `${v}건`}
+            yUnit="건"
           />
         )}
       </section>

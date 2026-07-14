@@ -16,6 +16,7 @@ import {
 } from './queries';
 import { cacheGet, cacheSet } from './cache';
 import type { ProductFilters } from './product-url';
+import { createHash } from 'crypto';
 
 const NARRATIVE_VERSION = 'v1';
 
@@ -142,7 +143,11 @@ const narrativeMemo = new Map<string, string | null>();
 
 async function narrate(items: InsightItem[], asOf: string): Promise<string | null> {
   if (items.length === 0) return null;
-  const key = `voc:insight:narrative:${NARRATIVE_VERSION}:${asOf}`;
+  // 지표(facts)가 하루 안에 드리프트(경계값 카테고리 SURGE↔WATCH 등)해도 서술이
+  // 옛 내용으로 남지 않도록, 캐시 키에 facts 해시를 포함 → facts 바뀌면 서술 재생성.
+  const facts = items.map(i => `- ${i.text}`).join('\n');
+  const factsHash = createHash('sha256').update(facts).digest('hex').slice(0, 12);
+  const key = `voc:insight:narrative:${NARRATIVE_VERSION}:${asOf}:${factsHash}`;
 
   if (narrativeMemo.has(key)) return narrativeMemo.get(key) ?? null;
   const cached = await cacheGet<string>(key);
@@ -159,7 +164,6 @@ async function narrate(items: InsightItem[], asOf: string): Promise<string | nul
     const client = new OpenAI({ apiKey });
     const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
 
-    const facts = items.map(i => `- ${i.text}`).join('\n');
     const resp = await client.chat.completions.create({
       model,
       messages: [
