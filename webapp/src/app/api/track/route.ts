@@ -11,13 +11,22 @@ const ALLOWED_TYPES = new Set([
   'drilldown_open',
   'keyword_select',
   'chat_open',
+  'client_error',
 ]);
+
+// 봇/스크린샷터 제외 — headless 렌더러가 TrackView를 실행해 사용 지표를 오염시키므로.
+const BOT_UA = /bot|crawl|spider|slurp|screenshot|headless|preview|monitor|lighthouse/i;
 
 function str(v: unknown, max: number): string {
   return typeof v === 'string' ? v.slice(0, max) : '';
 }
 
 export async function POST(req: NextRequest) {
+  const ua = req.headers.get('user-agent') || '';
+  if (BOT_UA.test(ua)) {
+    return NextResponse.json({ ok: true, skipped: 'bot' }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = await req.json();
@@ -32,12 +41,13 @@ export async function POST(req: NextRequest) {
 
   await logEvent({
     ts: Date.now(),
+    vid: str(body.vid, 64),
     ip: clientIp(req.headers),
     type,
     path: str(body.path, 200),
     filters: str(body.filters, 300),
-    detail: str(body.detail, 200),
-    ua: str(req.headers.get('user-agent'), 200),
+    detail: str(body.detail, 300),
+    ua: ua.slice(0, 200),
   });
 
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });

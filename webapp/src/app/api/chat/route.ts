@@ -110,8 +110,11 @@ export async function POST(req: NextRequest) {
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
 
-  // 에이전트 사용 트래킹용 — IP 익명 + 마지막 사용자 질문
+  // 에이전트 사용 트래킹용 — 익명 방문자 ID(vid) + IP + 마지막 사용자 질문
   const ip = clientIp(req.headers);
+  const vid = typeof (body as { vid?: unknown }).vid === 'string'
+    ? (body as { vid: string }).vid.slice(0, 64)
+    : '';
   const lastUser = [...userMessages].reverse().find(m => m.role === 'user')?.content ?? '';
 
   const stream = new ReadableStream<Uint8Array>({
@@ -160,6 +163,7 @@ export async function POST(req: NextRequest) {
               .filter(Boolean);
             await logEvent({
               ts: Date.now(),
+              vid,
               ip,
               type: 'agent_query',
               prompt: lastUser.slice(0, 500),
@@ -221,6 +225,7 @@ export async function POST(req: NextRequest) {
         stopKeepalive();
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[api/chat] error:', msg);
+        void logEvent({ ts: Date.now(), vid, ip, type: 'server_error', path: '/api/chat', detail: msg.slice(0, 300) });
         try { send({ type: 'error', message: msg }); } catch { /* stream already closed */ }
         try { controller.close(); } catch { /* already */ }
       }

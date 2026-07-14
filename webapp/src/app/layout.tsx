@@ -5,6 +5,7 @@ import { ChatSidebar } from '@/components/ChatSidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { TrackView } from '@/components/TrackView';
 import { HintLayer } from '@/components/HintLayer';
+import { ErrorReporter } from '@/components/ErrorReporter';
 
 export const metadata: Metadata = {
   title: 'VOC Dashboard',
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="container">{children}</main>
         <ChatSidebar />
         <HintLayer />
+        <ErrorReporter />
         <Suspense fallback={null}>
           <TrackView />
         </Suspense>

@@ -61,6 +61,7 @@ function safeDecode(s: string): string {
 export type UsageSummary = {
   sampled: number;
   by_type: Record<string, number>;
+  unique_visitors: number;
   unique_ips: number;
   daily: Array<{ date: string; count: number }>;
   top_filters: Array<{ key: string; count: number }>;
@@ -68,6 +69,7 @@ export type UsageSummary = {
   recent_agent_queries: Array<{
     ts: string; ip: string; prompt: string; sql: string; tokens: string; steps: string;
   }>;
+  recent_errors: Array<{ ts: string; type: string; path: string; detail: string }>;
 };
 
 // epoch(ms) → KST(UTC+9) 기준 YYYY-MM-DD
@@ -81,14 +83,20 @@ function kstDate(ms: string): string | null {
 export function aggregateUsage(events: StreamEvent[]): UsageSummary {
   const by_type: Record<string, number> = {};
   const ips = new Set<string>();
+  const vids = new Set<string>();
   const dailyCount: Record<string, number> = {};
   const filterCount: Record<string, number> = {};
   const drilldownCount: Record<string, number> = {};
   const recent_agent_queries: UsageSummary['recent_agent_queries'] = [];
+  const recent_errors: UsageSummary['recent_errors'] = [];
 
   for (const { fields: f } of events) {
     if (f.type) by_type[f.type] = (by_type[f.type] ?? 0) + 1;
     if (f.ip) ips.add(f.ip);
+    if (f.vid) vids.add(f.vid);
+    if (f.type === 'client_error' || f.type === 'server_error') {
+      recent_errors.push({ ts: f.ts ?? '', type: f.type, path: f.path ?? '', detail: f.detail ?? '' });
+    }
     const day = f.ts ? kstDate(f.ts) : null;
     if (day) dailyCount[day] = (dailyCount[day] ?? 0) + 1;
     if (f.type === 'page_view') {
@@ -116,11 +124,13 @@ export function aggregateUsage(events: StreamEvent[]): UsageSummary {
   return {
     sampled: events.length,
     by_type,
+    unique_visitors: vids.size,
     unique_ips: ips.size,
     daily,
     top_filters: topN(filterCount, 20),
     top_drilldowns: topN(drilldownCount, 20),
     recent_agent_queries: recent_agent_queries.slice(0, 30),
+    recent_errors: recent_errors.slice(0, 30),
   };
 }
 

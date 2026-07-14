@@ -6,6 +6,7 @@ import {
   fetchKeywordTrend,
 } from '@/lib/queries';
 import type { EmotionKey } from '@/lib/level';
+import { logEvent, clientIp } from '@/lib/events';
 
 export const runtime = 'nodejs';
 export const revalidate = 0;
@@ -59,6 +60,10 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     console.error('[api/drilldown] error:', e);
     const msg = e instanceof Error ? e.message : String(e);
+    await logEvent({
+      ts: Date.now(), ip: clientIp(req.headers), type: 'server_error',
+      path: '/api/drilldown', detail: `${category2}/${category3 ?? ''}: ${msg}`.slice(0, 300),
+    });
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

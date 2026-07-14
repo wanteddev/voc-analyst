@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { track } from '@/lib/track-client';
+import { track, visitorId } from '@/lib/track-client';
 
 type ToolTrace = {
   name: string;
@@ -109,7 +109,7 @@ export function ChatSidebar() {
       const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-        body: JSON.stringify({ messages: nextMessages.map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ vid: visitorId(), messages: nextMessages.map(m => ({ role: m.role, content: m.content })) }),
       });
       if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
 

@@ -60,9 +60,9 @@ export default async function AdminPage() {
 
       {/* KPI 요약 */}
       <div className="kpi-row" style={{ marginTop: 4 }}>
-        <div className="kpi">
-          <div className="lbl">순 방문 IP</div>
-          <div className="num">{u.unique_ips}</div>
+        <div className="kpi" data-hint={`순 방문자 = 브라우저별 익명 ID(vid) 고유 수 · IP ${u.unique_ips}개`}>
+          <div className="lbl">순 방문자</div>
+          <div className="num">{u.unique_visitors}</div>
         </div>
         {(['page_view', 'drilldown_open', 'chat_open', 'agent_query'] as const).map(t => (
           <div className="kpi" key={t}>
@@ -179,8 +179,42 @@ export default async function AdminPage() {
         )}
       </section>
 
+      {/* 최근 에러 */}
+      <section className={`card ${u.recent_errors.length ? '--surge' : ''}`}>
+        <div className="section-hdr">
+          <h2>최근 에러</h2>
+          <span className="hint">클라이언트·서버 에러 (client_error / server_error)</span>
+        </div>
+        {u.recent_errors.length === 0 ? (
+          <p style={{ color: 'var(--text-mute)', fontSize: 12 }}>최근 에러 없음 👍</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>시각(KST)</th>
+                <th style={th}>구분</th>
+                <th style={th}>경로</th>
+                <th style={th}>내용</th>
+              </tr>
+            </thead>
+            <tbody>
+              {u.recent_errors.map((e, i) => (
+                <tr key={i}>
+                  <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtKst(e.ts)}</td>
+                  <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--surge)' }}>
+                    {e.type === 'server_error' ? '서버' : '클라'}
+                  </td>
+                  <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 11 }}>{e.path || '—'}</td>
+                  <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 10.5, wordBreak: 'break-all' }}>{e.detail || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       <div className="foot">
-        <span>IP 익명 트래킹 · Redis Stream <code>voc:events</code> · MAXLEN ~200k</span>
+        <span>익명 트래킹(vid) · Redis Stream <code>voc:events</code> · MAXLEN ~200k · 봇 제외</span>
         <span>관리자 전용</span>
       </div>
     </div>
